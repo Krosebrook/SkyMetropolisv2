@@ -18,17 +18,17 @@ export interface BuildingConfig {
   cost: number;
   name: string;
   description: string;
-  color: string; // Main color for 3D material
-  popGen: number; // Population generation per tick
-  incomeGen: number; // Money generation per tick
+  color: string;
+  popGen: number;
+  incomeGen: number;
 }
 
 export interface TileData {
   x: number;
   y: number;
   buildingType: BuildingType;
-  // Suggested by AI for visual variety later
-  variant?: number;
+  variant: number; // 0-99 for procedural variation
+  rotation: number; // 0-3 for orientation
 }
 
 export type Grid = TileData[][];
@@ -37,13 +37,14 @@ export interface CityStats {
   money: number;
   population: number;
   day: number;
+  happiness: number; // New metric
 }
 
 export interface AIGoal {
   description: string;
   targetType: 'population' | 'money' | 'building_count';
   targetValue: number;
-  buildingType?: BuildingType; // If target is building_count
+  buildingType?: BuildingType;
   reward: number;
   completed: boolean;
 }
@@ -52,8 +53,10 @@ export interface NewsItem {
   id: string;
   text: string;
   type: 'positive' | 'negative' | 'neutral';
+  timestamp: number;
 }
 
+// Global Declaration for JSX
 declare global {
   namespace JSX {
     interface IntrinsicElements {
@@ -69,6 +72,21 @@ declare global {
       path: React.SVGProps<SVGPathElement>;
       circle: React.SVGProps<SVGCircleElement>;
       style: React.DetailedHTMLProps<React.StyleHTMLAttributes<HTMLStyleElement>, HTMLStyleElement>;
+      // R3F
+      group: any;
+      mesh: any;
+      meshStandardMaterial: any;
+      meshBasicMaterial: any;
+      boxGeometry: any;
+      planeGeometry: any;
+      cylinderGeometry: any;
+      coneGeometry: any;
+      sphereGeometry: any;
+      circleGeometry: any;
+      ringGeometry: any;
+      instancedMesh: any;
+      ambientLight: any;
+      directionalLight: any;
     }
   }
 }

@@ -124,6 +124,7 @@ export const generateNewsEvent = async (stats: CityStats, recentAction: string |
         id: Date.now().toString() + Math.random(),
         text: data.text,
         type: data.type,
+        timestamp: Date.now(),
       };
     }
   } catch (error) {
