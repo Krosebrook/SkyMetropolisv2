@@ -61,6 +61,10 @@ const GameScene = () => {
     const isBulldoze = selectedTool === BuildingType.None;
     const cursorColor = isBulldoze ? '#ef4444' : (showPreview ? '#ffffff' : '#fbbf24');
 
+    // Get the variant and rotation from the hovered tile to show exactly what will be built
+    const previewVariant = hovered ? grid[hovered.y][hovered.x].variant : 0;
+    const previewRotation = hovered ? grid[hovered.y][hovered.x].rotation : 0;
+
     return (
         <>
             <group>
@@ -90,7 +94,7 @@ const GameScene = () => {
                             {/* Road Markings */}
                             {tile.buildingType === BuildingType.Road && (
                                 <group position={[wx, 0, wz]}>
-                                    <RoadMarkings x={x} y={y} grid={grid} yOffset={-0.29} />
+                                    <RoadMarkings x={x} y={y} grid={grid} yOffset={-0.29} variant={tile.variant} />
                                 </group>
                             )}
                         </React.Fragment>
@@ -110,8 +114,8 @@ const GameScene = () => {
                     <ProceduralBuilding 
                         type={selectedTool} 
                         baseColor={BUILDINGS[selectedTool].color} 
-                        variant={0} 
-                        rotation={0} 
+                        variant={previewVariant} 
+                        rotation={previewRotation} 
                         opacity={0.6} 
                         transparent 
                     />
