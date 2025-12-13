@@ -2,8 +2,8 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React from 'react';
 
+// --- Domain Enums ---
 export enum BuildingType {
   None = 'None',
   Road = 'Road',
@@ -13,19 +13,23 @@ export enum BuildingType {
   Park = 'Park',
 }
 
+export type NewsType = 'positive' | 'negative' | 'neutral';
+export type GoalTargetType = 'population' | 'money' | 'building_count';
+
+// --- Entities ---
 export interface BuildingConfig {
-  type: BuildingType;
-  cost: number;
-  name: string;
-  description: string;
-  color: string;
-  popGen: number;
-  incomeGen: number;
+  readonly type: BuildingType;
+  readonly cost: number;
+  readonly name: string;
+  readonly description: string;
+  readonly color: string;
+  readonly popGen: number;
+  readonly incomeGen: number;
 }
 
 export interface TileData {
-  x: number;
-  y: number;
+  readonly x: number;
+  readonly y: number;
   buildingType: BuildingType;
   variant: number; // 0-99 for procedural variation
   rotation: number; // 0-3 for orientation
@@ -37,12 +41,13 @@ export interface CityStats {
   money: number;
   population: number;
   day: number;
-  happiness: number; // New metric
+  happiness: number; // 0-100
 }
 
 export interface AIGoal {
+  readonly id: string;
   description: string;
-  targetType: 'population' | 'money' | 'building_count';
+  targetType: GoalTargetType;
   targetValue: number;
   buildingType?: BuildingType;
   reward: number;
@@ -50,43 +55,17 @@ export interface AIGoal {
 }
 
 export interface NewsItem {
-  id: string;
+  readonly id: string;
   text: string;
-  type: 'positive' | 'negative' | 'neutral';
+  type: NewsType;
   timestamp: number;
 }
 
-// Global Declaration for JSX
+// --- Global ---
 declare global {
   namespace JSX {
     interface IntrinsicElements {
-      div: React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>;
-      span: React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>;
-      button: React.DetailedHTMLProps<React.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>;
-      input: React.DetailedHTMLProps<React.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>;
-      label: React.DetailedHTMLProps<React.LabelHTMLAttributes<HTMLLabelElement>, HTMLLabelElement>;
-      h1: React.DetailedHTMLProps<React.HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>;
-      p: React.DetailedHTMLProps<React.HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>;
-      a: React.DetailedHTMLProps<React.AnchorHTMLAttributes<HTMLAnchorElement>, HTMLAnchorElement>;
-      svg: React.SVGProps<SVGSVGElement>;
-      path: React.SVGProps<SVGPathElement>;
-      circle: React.SVGProps<SVGCircleElement>;
-      style: React.DetailedHTMLProps<React.StyleHTMLAttributes<HTMLStyleElement>, HTMLStyleElement>;
-      // R3F
-      group: any;
-      mesh: any;
-      meshStandardMaterial: any;
-      meshBasicMaterial: any;
-      boxGeometry: any;
-      planeGeometry: any;
-      cylinderGeometry: any;
-      coneGeometry: any;
-      sphereGeometry: any;
-      circleGeometry: any;
-      ringGeometry: any;
-      instancedMesh: any;
-      ambientLight: any;
-      directionalLight: any;
+      [elemName: string]: any;
     }
   }
 }

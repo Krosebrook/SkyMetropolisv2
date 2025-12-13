@@ -23,13 +23,14 @@ const GEOMETRIES = {
   }
 };
 
-// --- Road Sub-Components ---
+// --- Road Marking Sub-Components ---
 
 interface RoadSubComponentProps {
   material: THREE.Material;
 }
 
-const DashedLine = ({ horizontal = false, material }: { horizontal?: boolean } & RoadSubComponentProps) => (
+// 1. Straight Road Segment (Dashed Line)
+const MarkingStraight = ({ horizontal = false, material }: { horizontal?: boolean } & RoadSubComponentProps) => (
   <group rotation={[0, 0, horizontal ? Math.PI / 2 : 0]}>
     <mesh geometry={GEOMETRIES.road.dash} material={material} position={[0, 0.33, 0]} />
     <mesh geometry={GEOMETRIES.road.dash} material={material} position={[0, 0, 0]} />
@@ -37,11 +38,15 @@ const DashedLine = ({ horizontal = false, material }: { horizontal?: boolean } &
   </group>
 );
 
-const StopArm = ({ rotation, matLine, matZebra }: { rotation: number, matLine: THREE.Material, matZebra: THREE.Material }) => (
+// 2. Corner Segment (Curved Yellow Line)
+const MarkingCorner = ({ rotation, material }: { rotation: number } & RoadSubComponentProps) => (
+    <mesh geometry={GEOMETRIES.road.corner} material={material} position={[0,0,0]} rotation={[0, 0, rotation]} />
+);
+
+// 3. Stop Segment (Stop Line + Crosswalk)
+const MarkingStop = ({ rotation, matLine, matZebra }: { rotation: number, matLine: THREE.Material, matZebra: THREE.Material }) => (
   <group rotation={[0, 0, rotation]}>
-    {/* Stop bar */}
     <mesh geometry={GEOMETRIES.road.stopLine} material={matLine} position={[0, 0.22, 0]} />
-    {/* Crosswalk */}
     <group position={[0, 0.38, 0]}>
        <mesh geometry={GEOMETRIES.road.zebra} material={matZebra} position={[-0.2, 0, 0]} />
        <mesh geometry={GEOMETRIES.road.zebra} material={matZebra} position={[0, 0, 0]} />
@@ -50,7 +55,14 @@ const StopArm = ({ rotation, matLine, matZebra }: { rotation: number, matLine: T
   </group>
 );
 
-// --- Logic Helpers ---
+// --- Adjacency Logic ---
+
+const MASKS = {
+    UP: 1,
+    RIGHT: 2,
+    DOWN: 4,
+    LEFT: 8
+};
 
 const getAdjacencyMask = (x: number, y: number, grid: Grid) => {
   const hasUp = y > 0 && grid[y - 1][x].buildingType === BuildingType.Road;
@@ -58,11 +70,10 @@ const getAdjacencyMask = (x: number, y: number, grid: Grid) => {
   const hasDown = y < GRID_SIZE - 1 && grid[y + 1][x].buildingType === BuildingType.Road;
   const hasLeft = x > 0 && grid[y][x - 1].buildingType === BuildingType.Road;
   
-  // Bitmask: Left(8) | Down(4) | Right(2) | Up(1)
-  return (hasLeft ? 8 : 0) | (hasDown ? 4 : 0) | (hasRight ? 2 : 0) | (hasUp ? 1 : 0);
+  return (hasLeft ? MASKS.LEFT : 0) | (hasDown ? MASKS.DOWN : 0) | (hasRight ? MASKS.RIGHT : 0) | (hasUp ? MASKS.UP : 0);
 };
 
-// --- Main Road Component ---
+// --- Main Component ---
 
 export const RoadMarkings = React.memo(({ x, y, grid, yOffset, variant = 0 }: { x: number; y: number; grid: Grid; yOffset: number; variant?: number }) => {
   const mats = useMemo(() => ({
@@ -78,18 +89,70 @@ export const RoadMarkings = React.memo(({ x, y, grid, yOffset, variant = 0 }: { 
       position: [0, yOffset, 0] as [number, number, number]
   };
 
-  // Visual Variation Logic
-  // 0-39: Standard
-  // 40-69: Worn (Patches)
-  // 70-99: Utility (Manholes)
-  const isWorn = variant >= 40 && variant < 70;
-  const isUtility = variant >= 70;
+  // --- Render Strategy ---
+  const renderMarkings = () => {
+    // 0. Isolated or Unknown
+    if (mask === 0) return null;
 
-  const renderExtras = () => {
+    // 1. Straight Roads
+    if (mask === (MASKS.UP | MASKS.DOWN)) 
+        return <MarkingStraight material={mats.yellow} />;
+    
+    if (mask === (MASKS.LEFT | MASKS.RIGHT)) 
+        return <MarkingStraight horizontal material={mats.yellow} />;
+
+    // 2. Dead Ends (Single connection)
+    if (mask === MASKS.UP) return <MarkingStop rotation={0} matLine={mats.white} matZebra={mats.white} />;
+    if (mask === MASKS.RIGHT) return <MarkingStop rotation={-Math.PI/2} matLine={mats.white} matZebra={mats.white} />;
+    if (mask === MASKS.DOWN) return <MarkingStop rotation={Math.PI} matLine={mats.white} matZebra={mats.white} />;
+    if (mask === MASKS.LEFT) return <MarkingStop rotation={Math.PI/2} matLine={mats.white} matZebra={mats.white} />;
+
+    // 3. Corners
+    if (mask === (MASKS.UP | MASKS.RIGHT)) 
+        return <group position={[0.5, 0.5, 0]}><MarkingCorner rotation={Math.PI} material={mats.yellow} /></group>;
+    
+    if (mask === (MASKS.RIGHT | MASKS.DOWN)) 
+        return <group position={[0.5, -0.5, 0]}><MarkingCorner rotation={Math.PI/2} material={mats.yellow} /></group>;
+    
+    if (mask === (MASKS.DOWN | MASKS.LEFT)) 
+        return <group position={[-0.5, -0.5, 0]}><MarkingCorner rotation={0} material={mats.yellow} /></group>;
+    
+    if (mask === (MASKS.LEFT | MASKS.UP)) 
+        return <group position={[-0.5, 0.5, 0]}><MarkingCorner rotation={-Math.PI/2} material={mats.yellow} /></group>;
+
+    // 4. T-Junctions
+    if (mask === (MASKS.UP | MASKS.DOWN | MASKS.RIGHT)) 
+        return <><MarkingStraight material={mats.yellow} /><MarkingStop rotation={-Math.PI/2} matLine={mats.white} matZebra={mats.white} /></>;
+    
+    if (mask === (MASKS.UP | MASKS.DOWN | MASKS.LEFT)) 
+        return <><MarkingStraight material={mats.yellow} /><MarkingStop rotation={Math.PI/2} matLine={mats.white} matZebra={mats.white} /></>;
+    
+    if (mask === (MASKS.LEFT | MASKS.RIGHT | MASKS.UP)) 
+        return <><MarkingStraight horizontal material={mats.yellow} /><MarkingStop rotation={0} matLine={mats.white} matZebra={mats.white} /></>;
+    
+    if (mask === (MASKS.LEFT | MASKS.RIGHT | MASKS.DOWN)) 
+        return <><MarkingStraight horizontal material={mats.yellow} /><MarkingStop rotation={Math.PI} matLine={mats.white} matZebra={mats.white} /></>;
+
+    // 5. Cross (4-Way)
+    if (mask === 15) return (
+       <>
+          <MarkingStop rotation={0} matLine={mats.white} matZebra={mats.white} />
+          <MarkingStop rotation={Math.PI} matLine={mats.white} matZebra={mats.white} />
+          <MarkingStop rotation={-Math.PI/2} matLine={mats.white} matZebra={mats.white} />
+          <MarkingStop rotation={Math.PI/2} matLine={mats.white} matZebra={mats.white} />
+       </>
+    );
+
+    return <MarkingStraight material={mats.yellow} />;
+  };
+
+  const renderDetails = () => {
+    const isWorn = variant >= 40 && variant < 70;
+    const isUtility = variant >= 70;
+
     if (mask === 0) return null;
 
     if (isUtility) {
-        // Manholes appear on straights, dead ends, and intersections, but usually not on sharp corners unless complex
         const isCorner = [3, 6, 9, 12].includes(mask);
         if (!isCorner) {
              return <mesh geometry={GEOMETRIES.road.manhole} material={mats.manhole} position={[0, 0, 0.01]} />
@@ -97,69 +160,25 @@ export const RoadMarkings = React.memo(({ x, y, grid, yOffset, variant = 0 }: { 
     }
 
     if (isWorn) {
-        // Pseudo-random position based on coordinates
         const seed = (x * 17 + y * 23);
-        const px = ((seed % 7) / 10) - 0.3; // -0.3 to 0.3
+        const px = ((seed % 7) / 10) - 0.3;
         const py = ((seed % 5) / 10) - 0.2;
         const r = seed % 3;
         return <mesh geometry={GEOMETRIES.road.patch} material={mats.patch} position={[px, py, 0.005]} rotation={[0, 0, r]} />
     }
-
     return null;
-  };
-
-  const renderConfig = () => {
-    switch (mask) {
-        // Isolated
-        case 0: return null;
-        
-        // Dead Ends
-        case 1: return <StopArm rotation={0} matLine={mats.white} matZebra={mats.white} />;
-        case 2: return <StopArm rotation={-Math.PI/2} matLine={mats.white} matZebra={mats.white} />;
-        case 4: return <StopArm rotation={Math.PI} matLine={mats.white} matZebra={mats.white} />;
-        case 8: return <StopArm rotation={Math.PI/2} matLine={mats.white} matZebra={mats.white} />;
-
-        // Straights
-        case 5: return <DashedLine material={mats.yellow} />;
-        case 10: return <DashedLine horizontal material={mats.yellow} />;
-
-        // Corners
-        case 3: return <mesh geometry={GEOMETRIES.road.corner} material={mats.yellow} position={[0.5, 0.5, 0]} rotation={[0, 0, Math.PI]} />;
-        case 6: return <mesh geometry={GEOMETRIES.road.corner} material={mats.yellow} position={[0.5, -0.5, 0]} rotation={[0, 0, Math.PI / 2]} />;
-        case 12: return <mesh geometry={GEOMETRIES.road.corner} material={mats.yellow} position={[-0.5, -0.5, 0]} />;
-        case 9: return <mesh geometry={GEOMETRIES.road.corner} material={mats.yellow} position={[-0.5, 0.5, 0]} rotation={[0, 0, -Math.PI / 2]} />;
-
-        // T-Junctions
-        case 7: return <><DashedLine material={mats.yellow} /><StopArm rotation={-Math.PI/2} matLine={mats.white} matZebra={mats.white} /></>;
-        case 13: return <><DashedLine material={mats.yellow} /><StopArm rotation={Math.PI/2} matLine={mats.white} matZebra={mats.white} /></>;
-        case 11: return <><DashedLine horizontal material={mats.yellow} /><StopArm rotation={0} matLine={mats.white} matZebra={mats.white} /></>;
-        case 14: return <><DashedLine horizontal material={mats.yellow} /><StopArm rotation={Math.PI} matLine={mats.white} matZebra={mats.white} /></>;
-
-        // Cross
-        case 15: return (
-           <>
-              <StopArm rotation={0} matLine={mats.white} matZebra={mats.white} />
-              <StopArm rotation={Math.PI} matLine={mats.white} matZebra={mats.white} />
-              <StopArm rotation={-Math.PI/2} matLine={mats.white} matZebra={mats.white} />
-              <StopArm rotation={Math.PI/2} matLine={mats.white} matZebra={mats.white} />
-           </>
-        );
-
-        default: return <DashedLine material={mats.yellow} />;
-    }
   };
 
   return (
     <group {...groupProps}>
-        {renderConfig()}
-        {renderExtras()}
+        {renderMarkings()}
+        {renderDetails()}
     </group>
   );
 });
 
 // --- Building Visuals ---
 
-// Helper for decorative blocks (chimneys, AC units, steps)
 const DetailBlock = ({ position, scale, color, matProps }: any) => (
   <mesh geometry={GEOMETRIES.box} position={position} scale={scale} castShadow receiveShadow>
     <meshStandardMaterial color={color} {...matProps} />
@@ -211,7 +230,6 @@ export const ProceduralBuilding = React.memo(({ type, baseColor, variant, rotati
                     <mesh {...commonProps} material={roofMat} geometry={GEOMETRIES.cone} position={[0, 0.75, 0]} scale={[0.6, 0.4, 0.6]} rotation={[0, Math.PI/4, 0]} />
                     <WindowBlock position={[0.2, 0.3, 0.31]} scale={[0.15, 0.2, 0.05]} />
                     <WindowBlock position={[-0.2, 0.3, 0.31]} scale={[0.15, 0.2, 0.05]} />
-                    {/* Chimney */}
                     <DetailBlock position={[0.2, 0.7, -0.1]} scale={[0.1, 0.3, 0.1]} color="#78350f" matProps={matProps} />
                 </group>
             )}
@@ -224,22 +242,30 @@ export const ProceduralBuilding = React.memo(({ type, baseColor, variant, rotati
                     <mesh {...commonProps} material={roofMat} geometry={GEOMETRIES.box} position={[0.15, 0.75, 0]} scale={[0.45, 0.1, 0.8]} />
                     <WindowBlock position={[-0.15, 0.5, 0.36]} scale={[0.2, 0.2, 0.05]} />
                     <WindowBlock position={[0.15, 0.4, 0.36]} scale={[0.2, 0.2, 0.05]} />
-                    {/* Steps/Awning Detail */}
                     <DetailBlock position={[0.15, 0.05, 0.4]} scale={[0.2, 0.1, 0.1]} color="#9ca3af" matProps={matProps} />
                 </group>
             )}
-            {/* Variant C: Apartment Block (70-99) */}
-            {variant >= 70 && (
+            {/* Variant C: Apartment Block (70-89) */}
+            {variant >= 70 && variant < 90 && (
                 <group>
                     <mesh {...commonProps} material={mainMat} geometry={GEOMETRIES.box} position={[0, 0.5, 0]} scale={[0.8, 1.0, 0.8]} />
                     <mesh {...commonProps} material={roofMat} geometry={GEOMETRIES.box} position={[0, 1.05, 0]} scale={[0.85, 0.1, 0.85]} />
-                    {/* Balconies */}
                     <DetailBlock position={[0, 0.3, 0.42]} scale={[0.6, 0.05, 0.1]} color="#e2e8f0" matProps={matProps} />
                     <DetailBlock position={[0, 0.7, 0.42]} scale={[0.6, 0.05, 0.1]} color="#e2e8f0" matProps={matProps} />
                     <WindowBlock position={[-0.2, 0.45, 0.41]} scale={[0.15, 0.2, 0.05]} />
                     <WindowBlock position={[0.2, 0.45, 0.41]} scale={[0.15, 0.2, 0.05]} />
                     <WindowBlock position={[-0.2, 0.85, 0.41]} scale={[0.15, 0.2, 0.05]} />
                     <WindowBlock position={[0.2, 0.85, 0.41]} scale={[0.15, 0.2, 0.05]} />
+                </group>
+            )}
+             {/* Variant D: Modern Villa (90-99) */}
+             {variant >= 90 && (
+                <group>
+                    <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#f8fafc', ...matProps})} geometry={GEOMETRIES.box} position={[-0.1, 0.3, 0]} scale={[0.6, 0.6, 0.8]} />
+                    <mesh {...commonProps} material={mainMat} geometry={GEOMETRIES.box} position={[0.1, 0.7, 0]} scale={[0.5, 0.4, 0.9]} />
+                    <WindowBlock position={[-0.1, 0.3, 0.41]} scale={[0.4, 0.4, 0.05]} />
+                    <WindowBlock position={[0.2, 0.7, 0.46]} scale={[0.3, 0.3, 0.05]} />
+                    <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#38bdf8', ...matProps})} geometry={GEOMETRIES.box} position={[0.3, 0.1, 0]} scale={[0.3, 0.05, 0.6]} />
                 </group>
             )}
          </>
@@ -252,24 +278,32 @@ export const ProceduralBuilding = React.memo(({ type, baseColor, variant, rotati
                 <group>
                     <mesh {...commonProps} material={mainMat} geometry={GEOMETRIES.box} position={[0, 0.5, 0]} scale={[0.8, 1.0, 0.8]} />
                     <WindowBlock position={[0, 0.5, 0.41]} scale={[0.6, 0.8, 0.05]} />
-                    {/* Awning */}
                     <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#f43f5e', ...matProps})} geometry={GEOMETRIES.box} position={[0, 0.2, 0.45]} scale={[0.8, 0.1, 0.2]} rotation={[0.2, 0, 0]} />
                     <mesh {...commonProps} material={roofMat} geometry={GEOMETRIES.box} position={[0, 1.05, 0]} scale={[0.85, 0.1, 0.85]} />
-                    {/* Sign */}
                     <DetailBlock position={[0, 0.8, 0.42]} scale={[0.5, 0.15, 0.05]} color="#fcd34d" matProps={matProps} />
                 </group>
             )}
-            {/* Variant B: Office Tower (50-99) */}
-            {variant >= 50 && (
+            {/* Variant B: Office Tower (50-79) */}
+            {variant >= 50 && variant < 80 && (
                 <group>
                      <mesh {...commonProps} material={mainMat} geometry={GEOMETRIES.box} position={[0, 0.75, 0]} scale={[0.5, 1.5, 0.5]} />
                      <mesh {...commonProps} material={accentMat} geometry={GEOMETRIES.box} position={[0, 0.2, 0]} scale={[0.7, 0.4, 0.7]} />
-                     {/* Glass Facade */}
                      <WindowBlock position={[0, 0.9, 0.26]} scale={[0.3, 1.0, 0.05]} />
                      <WindowBlock position={[0, 0.9, -0.26]} scale={[0.3, 1.0, 0.05]} />
-                     {/* Antenna and Roof AC */}
                      <DetailBlock position={[0.1, 1.55, 0]} scale={[0.15, 0.1, 0.15]} color="#94a3b8" matProps={matProps} />
                      <mesh {...commonProps} material={metalMat} geometry={GEOMETRIES.cylinder} position={[-0.1, 1.6, 0]} scale={[0.02, 0.4, 0.02]} />
+                </group>
+            )}
+             {/* Variant C: Skyscraper (80-99) */}
+            {variant >= 80 && (
+                <group>
+                     <mesh {...commonProps} material={mainMat} geometry={GEOMETRIES.box} position={[0, 1.25, 0]} scale={[0.6, 2.5, 0.6]} />
+                     <mesh {...commonProps} material={mainMat} geometry={GEOMETRIES.box} position={[0, 0.3, 0]} scale={[0.9, 0.6, 0.9]} />
+                     <mesh {...commonProps} material={accentMat} geometry={GEOMETRIES.box} position={[0.31, 1.25, 0]} scale={[0.05, 2.5, 0.4]} />
+                     <mesh {...commonProps} material={accentMat} geometry={GEOMETRIES.box} position={[-0.31, 1.25, 0]} scale={[0.05, 2.5, 0.4]} />
+                     <mesh {...commonProps} material={accentMat} geometry={GEOMETRIES.box} position={[0, 1.25, 0.31]} scale={[0.4, 2.5, 0.05]} />
+                     <mesh {...commonProps} material={accentMat} geometry={GEOMETRIES.box} position={[0, 1.25, -0.31]} scale={[0.4, 2.5, 0.05]} />
+                     <mesh {...commonProps} material={metalMat} geometry={GEOMETRIES.cone} position={[0, 2.6, 0]} scale={[0.1, 0.5, 0.1]} />
                 </group>
             )}
         </>
@@ -277,29 +311,37 @@ export const ProceduralBuilding = React.memo(({ type, baseColor, variant, rotati
 
       {type === BuildingType.Industrial && (
         <>
-            {/* Variant A: Factory with smokestack (0-59) */}
+            {/* Variant A: Factory (0-59) */}
             {variant < 60 && (
                 <group>
                     <mesh {...commonProps} material={mainMat} geometry={GEOMETRIES.box} position={[0, 0.4, 0]} scale={[0.9, 0.8, 0.8]} />
-                    {/* Sawtooth Roof */}
                     <mesh {...commonProps} material={roofMat} geometry={GEOMETRIES.box} position={[-0.22, 0.9, 0]} scale={[0.45, 0.15, 0.8]} rotation={[0,0,Math.PI/6]} />
                     <mesh {...commonProps} material={roofMat} geometry={GEOMETRIES.box} position={[0.22, 0.9, 0]} scale={[0.45, 0.15, 0.8]} rotation={[0,0,Math.PI/6]} />
-                    {/* Smokestack */}
                     <mesh {...commonProps} material={metalMat} geometry={GEOMETRIES.cylinder} position={[0.35, 0.8, 0.3]} scale={[0.1, 1.4, 0.1]} />
                     <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color:'#333', ...matProps})} geometry={GEOMETRIES.cylinder} position={[0.35, 1.5, 0.3]} scale={[0.12, 0.1, 0.12]} />
                 </group>
             )}
-             {/* Variant B: Storage Tanks (60-99) */}
-             {variant >= 60 && (
+             {/* Variant B: Storage Tanks (60-79) */}
+             {variant >= 60 && variant < 80 && (
                 <group>
                     <mesh {...commonProps} material={mainMat} geometry={GEOMETRIES.box} position={[0, 0.1, 0]} scale={[0.95, 0.2, 0.95]} />
                     <mesh {...commonProps} material={accentMat} geometry={GEOMETRIES.cylinder} position={[-0.25, 0.45, -0.25]} scale={[0.3, 0.7, 0.3]} />
                     <mesh {...commonProps} material={accentMat} geometry={GEOMETRIES.cylinder} position={[0.25, 0.45, 0.25]} scale={[0.3, 0.7, 0.3]} />
-                    {/* Pipes */}
                     <mesh {...commonProps} material={metalMat} geometry={GEOMETRIES.box} position={[0, 0.4, 0]} scale={[0.8, 0.05, 0.05]} rotation={[0, Math.PI/4, 0]} />
                     <mesh {...commonProps} material={metalMat} geometry={GEOMETRIES.cylinder} position={[0, 0.7, 0]} scale={[0.05, 0.6, 0.05]} />
                 </group>
              )}
+             {/* Variant C: Warehouse (80-99) */}
+             {variant >= 80 && (
+                <group>
+                    <mesh {...commonProps} material={mainMat} geometry={GEOMETRIES.box} position={[0, 0.35, 0]} scale={[0.9, 0.7, 0.9]} />
+                    <DetailBlock position={[-0.2, 0.75, 0]} scale={[0.15, 0.15, 0.15]} color="#94a3b8" matProps={matProps} />
+                    <DetailBlock position={[0.2, 0.75, 0]} scale={[0.15, 0.15, 0.15]} color="#94a3b8" matProps={matProps} />
+                    <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#334155', ...matProps})} geometry={GEOMETRIES.box} position={[0, 0.2, 0.46]} scale={[0.2, 0.3, 0.05]} />
+                    <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#334155', ...matProps})} geometry={GEOMETRIES.box} position={[-0.3, 0.2, 0.46]} scale={[0.2, 0.3, 0.05]} />
+                    <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#334155', ...matProps})} geometry={GEOMETRIES.box} position={[0.3, 0.2, 0.46]} scale={[0.2, 0.3, 0.05]} />
+                </group>
+            )}
         </>
       )}
       
@@ -323,7 +365,6 @@ export const ProceduralBuilding = React.memo(({ type, baseColor, variant, rotati
                     <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#94a3b8', ...matProps})} geometry={GEOMETRIES.cylinder} position={[0, 0.1, 0]} scale={[0.6, 0.2, 0.6]} />
                     <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#60a5fa', ...matProps, transparent: true, opacity: 0.8})} geometry={GEOMETRIES.cylinder} position={[0, 0.15, 0]} scale={[0.5, 0.15, 0.5]} />
                     <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#cbd5e1', ...matProps})} geometry={GEOMETRIES.cylinder} position={[0, 0.3, 0]} scale={[0.1, 0.4, 0.1]} />
-                    {/* Benches */}
                     <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#78350f', ...matProps})} geometry={GEOMETRIES.box} position={[0.35, 0.1, 0]} scale={[0.1, 0.15, 0.3]} />
                     <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color: '#78350f', ...matProps})} geometry={GEOMETRIES.box} position={[-0.35, 0.1, 0]} scale={[0.1, 0.15, 0.3]} />
                 </>

@@ -6,51 +6,62 @@ import { BuildingType, CityStats, Grid } from '../types';
 import { BUILDINGS, GRID_SIZE } from '../constants';
 
 /**
- * Calculates the next state of the city based on the current grid and stats.
- * Pure function for determinism.
+ * Calculates the next city state based on current grid configuration.
+ * Pure function: (Stats, Grid) -> Stats
  */
 export const calculateNextDay = (currentStats: CityStats, grid: Grid): CityStats => {
   let dailyIncome = 0;
-  let dailyPopGrowth = 0;
-  let residentialCount = 0;
-  let parkCount = 0;
+  let grossPopGrowth = 0;
+  
+  const counts = {
+    [BuildingType.Residential]: 0,
+    [BuildingType.Commercial]: 0,
+    [BuildingType.Industrial]: 0,
+    [BuildingType.Park]: 0,
+    [BuildingType.Road]: 0,
+  };
 
-  // 1. Scan Grid
-  grid.forEach(row => {
-    row.forEach(tile => {
-      if (tile.buildingType !== BuildingType.None) {
+  // 1. Aggregate Tile Data
+  for(const row of grid) {
+    for(const tile of row) {
+        if (tile.buildingType === BuildingType.None) continue;
+        
         const config = BUILDINGS[tile.buildingType];
         dailyIncome += config.incomeGen;
-        dailyPopGrowth += config.popGen;
-
-        if (tile.buildingType === BuildingType.Residential) residentialCount++;
-        if (tile.buildingType === BuildingType.Park) parkCount++;
-      }
-    });
-  });
-
-  // 2. Logic Modifiers
-  const maxPopulation = residentialCount * 50;
-  
-  // Park bonus to income (tourism/value) and population attraction
-  if (parkCount > 0) {
-    dailyPopGrowth += Math.floor(parkCount * 0.5); 
+        grossPopGrowth += config.popGen;
+        
+        if (counts[tile.buildingType] !== undefined) {
+            counts[tile.buildingType]++;
+        }
+    }
   }
 
-  // 3. Apply Changes
-  let newPop = currentStats.population + dailyPopGrowth;
+  // 2. Apply Simulation Rules
+  const populationCap = counts[BuildingType.Residential] * 50;
   
-  // Cap population
-  if (newPop > maxPopulation) newPop = maxPopulation;
+  // Bonus: Parks boost growth
+  if (counts[BuildingType.Park] > 0) {
+    grossPopGrowth += Math.floor(counts[BuildingType.Park] * 0.5); 
+  }
+
+  // 3. Update Population
+  let newPop = currentStats.population + grossPopGrowth;
   
-  // Decay if overpopulated or no homes
-  if (residentialCount === 0 && currentStats.population > 0) {
+  // Cap Logic
+  if (newPop > populationCap) newPop = populationCap;
+  
+  // Decay Logic: No homes = people leave
+  if (counts[BuildingType.Residential] === 0 && currentStats.population > 0) {
     newPop = Math.max(0, currentStats.population - 10);
   }
 
-  // Calculate Happiness (Simple heuristic)
-  // Base 50, +1 per park, -1 per 100 pop if low infrastructure
-  const happiness = Math.min(100, Math.max(0, 50 + (parkCount * 2) - (currentStats.population > 200 && parkCount < 2 ? 10 : 0)));
+  // 4. Calculate Happiness
+  // Base 50
+  // +2 per Park
+  // -1 per 100 pop if Road < Pop/20 (Traffic congestion heuristic)
+  const trafficPenalty = (currentStats.population / 20) > counts[BuildingType.Road] ? 10 : 0;
+  const parkBonus = counts[BuildingType.Park] * 2;
+  const happiness = Math.min(100, Math.max(0, 50 + parkBonus - trafficPenalty));
 
   return {
     money: currentStats.money + dailyIncome,
@@ -60,24 +71,21 @@ export const calculateNextDay = (currentStats: CityStats, grid: Grid): CityStats
   };
 };
 
+/**
+ * Generates the initial procedural terrain grid.
+ */
 export const createInitialGrid = (): Grid => {
-  const grid: Grid = [];
-  const center = GRID_SIZE / 2;
-  
-  for (let y = 0; y < GRID_SIZE; y++) {
-    const row: any[] = [];
-    for (let x = 0; x < GRID_SIZE; x++) {
-      // Procedural noise for variants
+  return Array.from({ length: GRID_SIZE }, (_, y) => 
+    Array.from({ length: GRID_SIZE }, (_, x) => {
+      // Simplex-like noise for texture variation
       const noise = Math.abs(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1;
-      row.push({ 
+      return { 
         x, 
         y, 
         buildingType: BuildingType.None,
         variant: Math.floor(noise * 100),
         rotation: Math.floor(noise * 4) 
-      });
-    }
-    grid.push(row);
-  }
-  return grid;
+      };
+    })
+  );
 };

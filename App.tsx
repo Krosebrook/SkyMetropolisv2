@@ -17,17 +17,8 @@ const GameContainer = () => {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden selection:bg-transparent bg-sky-900">
-      {/* 3D World - Always rendered for background effect */}
       <IsoMap />
-
-      {/* Interface Layer */}
-      {state.gameStarted ? (
-        <HUD />
-      ) : (
-        <StartScreen onStart={handleStart} />
-      )}
-      
-      {/* Global CSS injections */}
+      {state.gameStarted ? <HUD /> : <StartScreen onStart={handleStart} />}
       <style>{`
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }

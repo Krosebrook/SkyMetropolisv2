@@ -5,14 +5,16 @@
 import React, { useState, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { MapControls, Environment, OrthographicCamera, Outlines } from '@react-three/drei';
-import { useGame } from '../context/GameContext';
-import { BuildingType, BuildingConfig } from '../types';
-import { BUILDINGS, GRID_SIZE } from '../constants';
-import { ProceduralBuilding, RoadMarkings } from './World/WorldAssets';
-import { TrafficSystem, EnvironmentSystem } from './World/WorldSystems';
 import * as THREE from 'three';
+import { useGame } from '../context/GameContext';
+import { BuildingType } from '../types';
+import { BUILDINGS, WORLD_OFFSET } from '../constants';
+import { ProceduralBuilding } from './World/BuildingAssets';
+import { RoadMarkings } from './World/RoadAssets';
+import { TrafficSystem, EnvironmentSystem } from './World/WorldSystems';
 
-const WORLD_OFFSET = GRID_SIZE / 2 - 0.5;
+// --- Helpers ---
+
 const gridToWorld = (x: number, y: number) => [x - WORLD_OFFSET, 0, y - WORLD_OFFSET] as [number, number, number];
 
 // --- Sub-components ---
@@ -21,7 +23,6 @@ const GroundTile = React.memo(({ x, y, type, onClick, onHover }: any) => {
     const [wx, _, wz] = gridToWorld(x, y);
     const color = type === BuildingType.None ? '#10b981' : type === BuildingType.Road ? '#374151' : '#d1d5db';
     const height = 0.5;
-    const yPos = -0.3 - (type === BuildingType.None ? 0 : 0.02); // Roads slightly higher
 
     return (
         <mesh 
@@ -36,7 +37,7 @@ const GroundTile = React.memo(({ x, y, type, onClick, onHover }: any) => {
     );
 });
 
-const Cursor = ({ x, y, color }: { x: number, y: number, color: string }) => {
+const SelectionCursor = ({ x, y, color }: { x: number, y: number, color: string }) => {
     const [wx, _, wz] = gridToWorld(x, y);
     return (
         <mesh position={[wx, -0.24, wz]} rotation={[-Math.PI/2, 0, 0]}>
@@ -47,7 +48,7 @@ const Cursor = ({ x, y, color }: { x: number, y: number, color: string }) => {
     );
 }
 
-// --- Main Scene ---
+// --- Scene ---
 
 const GameScene = () => {
     const { state, actions } = useGame();
@@ -56,14 +57,10 @@ const GameScene = () => {
 
     const handleHover = useCallback((x: number, y: number) => setHovered({ x, y }), []);
 
-    // Preview calculations
-    const showPreview = hovered && selectedTool !== BuildingType.None && grid[hovered.y][hovered.x].buildingType === BuildingType.None;
+    // Cursor Logic
     const isBulldoze = selectedTool === BuildingType.None;
+    const showPreview = hovered && !isBulldoze && grid[hovered.y][hovered.x].buildingType === BuildingType.None;
     const cursorColor = isBulldoze ? '#ef4444' : (showPreview ? '#ffffff' : '#fbbf24');
-
-    // Get the variant and rotation from the hovered tile to show exactly what will be built
-    const previewVariant = hovered ? grid[hovered.y][hovered.x].variant : 0;
-    const previewRotation = hovered ? grid[hovered.y][hovered.x].rotation : 0;
 
     return (
         <>
@@ -79,7 +76,7 @@ const GameScene = () => {
                                 onHover={handleHover} 
                             />
                             
-                            {/* Static Buildings */}
+                            {/* Buildings */}
                             {tile.buildingType !== BuildingType.None && tile.buildingType !== BuildingType.Road && (
                                 <group position={[wx, 0, wz]}>
                                     <ProceduralBuilding 
@@ -91,7 +88,7 @@ const GameScene = () => {
                                 </group>
                             )}
                             
-                            {/* Road Markings */}
+                            {/* Roads */}
                             {tile.buildingType === BuildingType.Road && (
                                 <group position={[wx, 0, wz]}>
                                     <RoadMarkings x={x} y={y} grid={grid} yOffset={-0.29} variant={tile.variant} />
@@ -102,20 +99,19 @@ const GameScene = () => {
                 }))}
             </group>
 
-            {/* Systems */}
             <TrafficSystem grid={grid} />
             <EnvironmentSystem />
 
-            {/* UX Overlays */}
-            {hovered && <Cursor x={hovered.x} y={hovered.y} color={cursorColor} />}
+            {/* Overlays */}
+            {hovered && <SelectionCursor x={hovered.x} y={hovered.y} color={cursorColor} />}
             
             {showPreview && hovered && (
                 <group position={[gridToWorld(hovered.x, hovered.y)[0], 0, gridToWorld(hovered.x, hovered.y)[2]]}>
                     <ProceduralBuilding 
                         type={selectedTool} 
                         baseColor={BUILDINGS[selectedTool].color} 
-                        variant={previewVariant} 
-                        rotation={previewRotation} 
+                        variant={hovered ? grid[hovered.y][hovered.x].variant : 0} 
+                        rotation={0} 
                         opacity={0.6} 
                         transparent 
                     />

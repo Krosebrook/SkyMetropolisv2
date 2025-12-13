@@ -4,14 +4,16 @@
 */
 import { BuildingConfig, BuildingType } from './types';
 
-// Map Settings
-export const GRID_SIZE = 16; // Increased slightly for better layout
+// World Configuration
+export const GRID_SIZE = 16;
+export const WORLD_OFFSET = GRID_SIZE / 2 - 0.5;
 
-// Game Settings
+// Simulation Configuration
 export const TICK_RATE_MS = 2000; 
-export const INITIAL_MONEY = 1200;
+export const INITIAL_MONEY = 1500;
 export const DEMOLISH_COST = 5;
 
+// Building Registry
 export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
   [BuildingType.None]: {
     type: BuildingType.None,
@@ -29,7 +31,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     description: 'Infrastructure',
     color: '#374151',
     popGen: 0,
-    incomeGen: -1, // Maintenance cost
+    incomeGen: -1,
   },
   [BuildingType.Residential]: {
     type: BuildingType.Residential,
@@ -38,7 +40,7 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     description: '+5 Pop/day',
     color: '#f87171',
     popGen: 5,
-    incomeGen: 2, // Small tax
+    incomeGen: 2,
   },
   [BuildingType.Commercial]: {
     type: BuildingType.Commercial,
@@ -65,6 +67,6 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
     description: '+Happiness',
     color: '#4ade80',
     popGen: 1,
-    incomeGen: -2, // Maintenance
+    incomeGen: -2,
   },
 };
