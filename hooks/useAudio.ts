@@ -24,7 +24,7 @@ const getSound = (key: SoundKey): Howl => {
   if (!sfxCache[key]) {
     sfxCache[key] = new Howl({
       src: [SOUNDS[key]],
-      volume: key === 'bgm' ? 0.15 : (key === 'error' ? 0.3 : 0.4),
+      volume: key === 'bgm' ? 0.0 : (key === 'error' ? 0.3 : 0.4), // Start BGM at 0 for fade-in
       loop: key === 'bgm',
       html5: key === 'bgm',
       onloaderror: (_id: number, error: unknown) => console.warn(`Failed to load sound: ${key}`, error),
@@ -34,12 +34,25 @@ const getSound = (key: SoundKey): Howl => {
 };
 
 export const useAudio = () => {
-  const play = (sound: SoundKey) => {
+  const play = (sound: SoundKey, options?: { rate?: number, volume?: number, fade?: number }) => {
     try {
       const s = getSound(sound);
+      
+      // Apply options
+      if (options?.rate) s.rate(options.rate);
+      if (options?.volume) s.volume(options.volume);
+
       if (sound === 'bgm') {
-        if (!s.playing()) s.play();
+        if (!s.playing()) {
+          s.play();
+          if (options?.fade) {
+            s.fade(0, 0.15, options.fade); // Fade in to 0.15 volume
+          } else {
+            s.volume(0.15);
+          }
+        }
       } else {
+        // One-shots can overlap
         s.play();
       }
     } catch (e) {
@@ -47,10 +60,15 @@ export const useAudio = () => {
     }
   };
 
-  const stop = (sound: SoundKey) => {
+  const stop = (sound: SoundKey, options?: { fade?: number }) => {
     try {
       const s = getSound(sound);
-      s.stop();
+      if (options?.fade && s.playing()) {
+        s.fade(s.volume(), 0, options.fade);
+        setTimeout(() => s.stop(), options.fade);
+      } else {
+        s.stop();
+      }
     } catch (e) {
        console.warn("Audio stop error", e);
     }

@@ -7,7 +7,6 @@ import { Grid, CityStats, BuildingType, AIGoal, NewsItem } from '../types';
 import { createInitialGrid, calculateNextDay } from '../engine/simulation';
 import { INITIAL_MONEY, TICK_RATE_MS, BUILDINGS, DEMOLISH_COST } from '../constants';
 import { generateCityGoal, generateNewsEvent } from '../services/geminiService';
-import { useAudio } from '../hooks/useAudio';
 
 // --- State ---
 
@@ -20,6 +19,7 @@ interface GameState {
   currentGoal: AIGoal | null;
   isGeneratingGoal: boolean;
   newsFeed: NewsItem[];
+  lastSound: { key: string; id: number } | null;
 }
 
 const initialState: GameState = {
@@ -31,6 +31,7 @@ const initialState: GameState = {
   currentGoal: null,
   isGeneratingGoal: false,
   newsFeed: [],
+  lastSound: null,
 };
 
 // --- Actions ---
@@ -43,7 +44,8 @@ type Action =
   | { type: 'SET_GOAL'; goal: AIGoal | null }
   | { type: 'SET_GENERATING_GOAL'; isGenerating: boolean }
   | { type: 'ADD_NEWS'; news: NewsItem }
-  | { type: 'CLAIM_REWARD' };
+  | { type: 'CLAIM_REWARD' }
+  | { type: 'TRIGGER_SOUND'; key: string };
 
 // --- Reducer ---
 
@@ -100,6 +102,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         stats: { ...state.stats, money: state.stats.money + state.currentGoal.reward },
         currentGoal: null
       };
+      
+    case 'TRIGGER_SOUND':
+      return { ...state, lastSound: { key: action.key, id: Date.now() } };
 
     default:
       return state;
@@ -121,7 +126,6 @@ const GameContext = createContext<GameContextProps | undefined>(undefined);
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
-  const { play } = useAudio();
   const stateRef = useRef(state);
   
   useEffect(() => { stateRef.current = state; }, [state]);
@@ -157,7 +161,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 2. Check Funds & Execute
     if (isValidAction) {
       if (currentMoney >= cost) {
-        play(isBulldoze ? 'bulldoze' : 'place');
+        dispatch({ type: 'TRIGGER_SOUND', key: isBulldoze ? 'bulldoze' : 'place' });
         
         const newGrid = state.grid.map(row => [...row]);
         newGrid[y][x] = { 
@@ -169,7 +173,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         dispatch({ type: 'UPDATE_GRID', grid: newGrid, cost });
       } else {
-        play('error');
+        dispatch({ type: 'TRIGGER_SOUND', key: 'error' });
         dispatch({ 
           type: 'ADD_NEWS', 
           news: { 
@@ -185,7 +189,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const claimReward = () => {
     if (stateRef.current.currentGoal?.completed) {
-      play('reward');
+      dispatch({ type: 'TRIGGER_SOUND', key: 'reward' });
       dispatch({ type: 'CLAIM_REWARD' });
     }
   };

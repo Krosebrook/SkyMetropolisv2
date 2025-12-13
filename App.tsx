@@ -13,14 +13,39 @@ const GameAudio = () => {
   const { state } = useGame();
   const { play, stop } = useAudio();
 
+  // Background Music
   useEffect(() => {
     if (state.gameStarted) {
-      play('bgm');
+      // Fade in BGM over 2 seconds
+      play('bgm', { fade: 2000 });
     } else {
-      stop('bgm');
+      // Fade out BGM over 1 second
+      stop('bgm', { fade: 1000 });
     }
-    return () => stop('bgm');
-  }, [state.gameStarted]);
+    return () => stop('bgm', { fade: 500 });
+  }, [state.gameStarted, play, stop]);
+
+  // Sound Effects
+  useEffect(() => {
+    if (state.lastSound) {
+      const { key } = state.lastSound;
+      
+      // Randomized pitch for repetitive actions
+      if (key === 'place' || key === 'bulldoze') {
+        const pitch = 0.9 + Math.random() * 0.2;
+        play(key as any, { rate: pitch });
+      } 
+      else if (key === 'error') {
+        play('error', { rate: 0.8 });
+      } 
+      else if (key === 'reward') {
+        play('reward', { volume: 0.6 });
+      }
+      else {
+        play(key as any);
+      }
+    }
+  }, [state.lastSound, play]);
 
   return null;
 };
@@ -31,7 +56,7 @@ const GameContainer = () => {
 
   const handleStart = (aiEnabled: boolean) => {
     resumeAudioContext();
-    play('uiClick');
+    play('uiClick', { rate: 1.1 }); // Slightly higher pitch for start button
     dispatch({ type: 'START_GAME', aiEnabled });
   };
 
