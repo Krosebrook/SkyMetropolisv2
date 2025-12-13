@@ -32,7 +32,7 @@ export interface TileData {
   readonly y: number;
   buildingType: BuildingType;
   variant: number; // 0-99 for procedural variation
-  rotation: number; // 0-3 for orientation
+  rotation: number; // 0-3 for orientation (0, PI/2, PI, 3PI/2)
 }
 
 export type Grid = TileData[][];

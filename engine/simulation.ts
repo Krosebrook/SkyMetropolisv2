@@ -3,17 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { BuildingType, CityStats, Grid } from '../types';
-import { BUILDINGS, GRID_SIZE } from '../constants';
+import { BUILDINGS, GRID_SIZE, GAME_BALANCE } from '../constants';
+
+type BuildingCounts = Record<BuildingType, number>;
 
 /**
- * Calculates the next city state based on current grid configuration.
- * Pure function: (Stats, Grid) -> Stats
+ * Aggregates building counts and basic production metrics from the grid.
  */
-export const calculateNextDay = (currentStats: CityStats, grid: Grid): CityStats => {
-  let dailyIncome = 0;
-  let grossPopGrowth = 0;
-  
-  const counts = {
+const aggregateGridMetrics = (grid: Grid) => {
+  const counts: BuildingCounts = {
+    [BuildingType.None]: 0,
     [BuildingType.Residential]: 0,
     [BuildingType.Commercial]: 0,
     [BuildingType.Industrial]: 0,
@@ -21,53 +20,75 @@ export const calculateNextDay = (currentStats: CityStats, grid: Grid): CityStats
     [BuildingType.Road]: 0,
   };
 
-  // 1. Aggregate Tile Data
-  for(const row of grid) {
-    for(const tile of row) {
-        if (tile.buildingType === BuildingType.None) continue;
-        
-        const config = BUILDINGS[tile.buildingType];
-        dailyIncome += config.incomeGen;
-        grossPopGrowth += config.popGen;
-        
-        if (counts[tile.buildingType] !== undefined) {
-            counts[tile.buildingType]++;
-        }
+  let dailyIncome = 0;
+  let grossPopGrowth = 0;
+
+  for (const row of grid) {
+    for (const tile of row) {
+      if (tile.buildingType === BuildingType.None) continue;
+      
+      const config = BUILDINGS[tile.buildingType];
+      dailyIncome += config.incomeGen;
+      grossPopGrowth += config.popGen;
+      
+      counts[tile.buildingType]++;
     }
   }
 
-  // 2. Apply Simulation Rules
-  const populationCap = counts[BuildingType.Residential] * 50;
+  return { counts, dailyIncome, grossPopGrowth };
+};
+
+/**
+ * Calculates new population based on capacity and growth factors.
+ */
+const calculatePopulation = (currentPop: number, grossGrowth: number, counts: BuildingCounts): number => {
+  const populationCap = counts[BuildingType.Residential] * GAME_BALANCE.POPULATION_PER_RESIDENTIAL;
   
   // Bonus: Parks boost growth
-  if (counts[BuildingType.Park] > 0) {
-    grossPopGrowth += Math.floor(counts[BuildingType.Park] * 0.5); 
-  }
+  const parkBonus = counts[BuildingType.Park] > 0 ? Math.floor(counts[BuildingType.Park] * 0.5) : 0;
+  const totalGrowth = grossGrowth + parkBonus;
 
-  // 3. Update Population
-  let newPop = currentStats.population + grossPopGrowth;
+  let newPop = currentPop + totalGrowth;
   
-  // Cap Logic
+  // Apply Cap
   if (newPop > populationCap) newPop = populationCap;
   
-  // Decay Logic: No homes = people leave
-  if (counts[BuildingType.Residential] === 0 && currentStats.population > 0) {
-    newPop = Math.max(0, currentStats.population - 10);
+  // Apply Decay (Homelessness)
+  if (counts[BuildingType.Residential] === 0 && currentPop > 0) {
+    newPop = Math.max(0, currentPop - GAME_BALANCE.POPULATION_DECAY);
   }
 
-  // 4. Calculate Happiness
-  // Base 50
-  // +2 per Park
-  // -1 per 100 pop if Road < Pop/20 (Traffic congestion heuristic)
-  const trafficPenalty = (currentStats.population / 20) > counts[BuildingType.Road] ? 10 : 0;
-  const parkBonus = counts[BuildingType.Park] * 2;
-  const happiness = Math.min(100, Math.max(0, 50 + parkBonus - trafficPenalty));
+  return newPop;
+};
+
+/**
+ * Calculates city happiness based on amenities and congestion.
+ */
+const calculateHappiness = (population: number, counts: BuildingCounts): number => {
+  const trafficPenalty = (population / GAME_BALANCE.TRAFFIC_PENALTY_THRESHOLD) > counts[BuildingType.Road] 
+    ? GAME_BALANCE.HAPPINESS_TRAFFIC_PENALTY 
+    : 0;
+    
+  const parkBonus = counts[BuildingType.Park] * GAME_BALANCE.HAPPINESS_PER_PARK;
+  
+  return Math.min(100, Math.max(0, GAME_BALANCE.HAPPINESS_BASE + parkBonus - trafficPenalty));
+};
+
+/**
+ * Main Simulation Tick
+ * Pure function: (Stats, Grid) -> Stats
+ */
+export const calculateNextDay = (currentStats: CityStats, grid: Grid): CityStats => {
+  const { counts, dailyIncome, grossPopGrowth } = aggregateGridMetrics(grid);
+
+  const newPopulation = calculatePopulation(currentStats.population, grossPopGrowth, counts);
+  const newHappiness = calculateHappiness(currentStats.population, counts);
 
   return {
     money: currentStats.money + dailyIncome,
-    population: newPop,
+    population: newPopulation,
     day: currentStats.day + 1,
-    happiness
+    happiness: newHappiness
   };
 };
 
@@ -77,7 +98,7 @@ export const calculateNextDay = (currentStats: CityStats, grid: Grid): CityStats
 export const createInitialGrid = (): Grid => {
   return Array.from({ length: GRID_SIZE }, (_, y) => 
     Array.from({ length: GRID_SIZE }, (_, x) => {
-      // Simplex-like noise for texture variation
+      // Deterministic noise for reproducibility (pseudo-random)
       const noise = Math.abs(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1;
       return { 
         x, 

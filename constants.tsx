@@ -13,6 +13,16 @@ export const TICK_RATE_MS = 2000;
 export const INITIAL_MONEY = 1500;
 export const DEMOLISH_COST = 5;
 
+// Balance Constants
+export const GAME_BALANCE = {
+  POPULATION_PER_RESIDENTIAL: 50, // Max pop cap per house
+  POPULATION_DECAY: 10,           // Pop loss when homeless
+  TRAFFIC_PENALTY_THRESHOLD: 20,  // 1 road per X pop needed
+  HAPPINESS_BASE: 50,
+  HAPPINESS_PER_PARK: 2,
+  HAPPINESS_TRAFFIC_PENALTY: 10,
+};
+
 // Building Registry
 export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
   [BuildingType.None]: {
