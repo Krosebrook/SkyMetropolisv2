@@ -7,7 +7,7 @@ import { GameProvider, useGame } from './context/GameContext';
 import IsoMap from './components/IsoMap';
 import HUD from './components/HUD';
 import StartScreen from './components/StartScreen';
-import { resumeAudioContext, useAudio } from './hooks/useAudio';
+import { resumeAudioContext, useAudio, SoundKey } from './hooks/useAudio';
 
 const GameAudio = () => {
   const { state } = useGame();
@@ -30,19 +30,19 @@ const GameAudio = () => {
     if (state.lastSound) {
       const { key } = state.lastSound;
       
-      // Randomized pitch for repetitive actions
+      // Randomized pitch for repetitive actions to prevent listener fatigue
       if (key === 'place' || key === 'bulldoze') {
-        const pitch = 0.9 + Math.random() * 0.2;
-        play(key as any, { rate: pitch });
+        const pitch = 0.8 + Math.random() * 0.4; // Pitch between 0.8 and 1.2
+        play(key as SoundKey, { rate: pitch });
       } 
       else if (key === 'error') {
-        play('error', { rate: 0.8 });
+        play('error', { rate: 0.8 }); // Lower pitch for errors
       } 
       else if (key === 'reward') {
         play('reward', { volume: 0.6 });
       }
       else {
-        play(key as any);
+        play(key as SoundKey);
       }
     }
   }, [state.lastSound, play]);

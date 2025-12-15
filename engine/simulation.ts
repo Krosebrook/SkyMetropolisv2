@@ -2,15 +2,17 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { BuildingType, CityStats, Grid } from '../types';
-import { BUILDINGS, GRID_SIZE, GAME_BALANCE } from '../constants';
+import { BuildingType, CityStats, Grid, TileData } from '../types';
+import { BUILDINGS, GRID_SIZE, GAME_BALANCE, DEMOLISH_COST } from '../constants';
 
 type BuildingCounts = Record<BuildingType, number>;
+
+// --- Analysis Helpers ---
 
 /**
  * Aggregates building counts and basic production metrics from the grid.
  */
-const aggregateGridMetrics = (grid: Grid) => {
+export const aggregateGridMetrics = (grid: Grid) => {
   const counts: BuildingCounts = {
     [BuildingType.None]: 0,
     [BuildingType.Residential]: 0,
@@ -28,8 +30,10 @@ const aggregateGridMetrics = (grid: Grid) => {
       if (tile.buildingType === BuildingType.None) continue;
       
       const config = BUILDINGS[tile.buildingType];
-      dailyIncome += config.incomeGen;
-      grossPopGrowth += config.popGen;
+      if (config) {
+        dailyIncome += config.incomeGen;
+        grossPopGrowth += config.popGen;
+      }
       
       counts[tile.buildingType]++;
     }
@@ -38,8 +42,10 @@ const aggregateGridMetrics = (grid: Grid) => {
   return { counts, dailyIncome, grossPopGrowth };
 };
 
+// --- Core Simulation Logic ---
+
 /**
- * Calculates new population based on capacity and growth factors.
+ * Calculates new population based on capacity, growth factors, and decay.
  */
 const calculatePopulation = (currentPop: number, grossGrowth: number, counts: BuildingCounts): number => {
   const populationCap = counts[BuildingType.Residential] * GAME_BALANCE.POPULATION_PER_RESIDENTIAL;
@@ -65,7 +71,8 @@ const calculatePopulation = (currentPop: number, grossGrowth: number, counts: Bu
  * Calculates city happiness based on amenities and congestion.
  */
 const calculateHappiness = (population: number, counts: BuildingCounts): number => {
-  const trafficPenalty = (population / GAME_BALANCE.TRAFFIC_PENALTY_THRESHOLD) > counts[BuildingType.Road] 
+  const roadsNeeded = population / GAME_BALANCE.TRAFFIC_PENALTY_THRESHOLD;
+  const trafficPenalty = roadsNeeded > counts[BuildingType.Road] 
     ? GAME_BALANCE.HAPPINESS_TRAFFIC_PENALTY 
     : 0;
     
@@ -90,6 +97,64 @@ export const calculateNextDay = (currentStats: CityStats, grid: Grid): CityStats
     day: currentStats.day + 1,
     happiness: newHappiness
   };
+};
+
+// --- Action Logic (Validation & Mutation) ---
+
+export interface ActionResult {
+  success: boolean;
+  cost: number;
+  newGrid?: Grid;
+  error?: string;
+  isBulldoze?: boolean;
+}
+
+/**
+ * Validates and executes a player action on the grid.
+ * Returns a result object indicating success/failure and the new state.
+ */
+export const executeGridAction = (
+  grid: Grid, 
+  stats: CityStats, 
+  x: number, 
+  y: number, 
+  tool: BuildingType
+): ActionResult => {
+  const tile = grid[y][x];
+  const isBulldoze = tool === BuildingType.None;
+  
+  // 1. Determine Cost and Validity
+  let cost = 0;
+  
+  if (isBulldoze) {
+    if (tile.buildingType === BuildingType.None) {
+      return { success: false, cost: 0, error: "Nothing to demolish" };
+    }
+    cost = DEMOLISH_COST;
+  } else {
+    // Prevent building on top of existing buildings (unless bulldozing first)
+    if (tile.buildingType !== BuildingType.None) {
+      return { success: false, cost: 0, error: "Tile is occupied" };
+    }
+    cost = BUILDINGS[tool].cost;
+  }
+
+  // 2. Check Funds
+  if (stats.money < cost) {
+    return { success: false, cost, error: "Insufficient funds" };
+  }
+
+  // 3. Mutate Grid (Immutable update)
+  const newGrid = grid.map(row => [...row]);
+  newGrid[y][x] = {
+    ...tile,
+    buildingType: tool,
+    // Preserve variant if bulldozing (ground texture), randomize if building
+    variant: isBulldoze ? tile.variant : Math.floor(Math.random() * 100),
+    rotation: Math.floor(Math.random() * 4) // Randomize rotation for visual variety
+  };
+
+  return { success: true, cost, newGrid, isBulldoze };
 };
 
 /**

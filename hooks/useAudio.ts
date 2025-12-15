@@ -15,7 +15,7 @@ const SOUNDS = {
   bgm: 'https://assets.mixkit.co/active_storage/sfx/1202/1202-preview.mp3'
 };
 
-type SoundKey = keyof typeof SOUNDS;
+export type SoundKey = keyof typeof SOUNDS;
 
 // Singleton cache
 const sfxCache: Partial<Record<SoundKey, Howl>> = {};
@@ -39,7 +39,9 @@ export const useAudio = () => {
       const s = getSound(sound);
       
       // Apply options
-      if (options?.rate) s.rate(options.rate);
+      // Always set rate to default 1.0 if not specified to avoid state sticking from previous plays
+      s.rate(options?.rate ?? 1.0);
+      
       if (options?.volume) s.volume(options.volume);
 
       if (sound === 'bgm') {

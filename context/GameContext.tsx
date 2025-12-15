@@ -2,13 +2,13 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import { Grid, CityStats, BuildingType, AIGoal, NewsItem } from '../types';
-import { createInitialGrid, calculateNextDay } from '../engine/simulation';
-import { INITIAL_MONEY, TICK_RATE_MS, BUILDINGS, DEMOLISH_COST } from '../constants';
+import { createInitialGrid, calculateNextDay, executeGridAction } from '../engine/simulation';
+import { INITIAL_MONEY, TICK_RATE_MS } from '../constants';
 import { generateCityGoal, generateNewsEvent } from '../services/geminiService';
 
-// --- State ---
+// --- State Definition ---
 
 interface GameState {
   grid: Grid;
@@ -40,7 +40,8 @@ type Action =
   | { type: 'START_GAME'; aiEnabled: boolean }
   | { type: 'TICK' }
   | { type: 'SELECT_TOOL'; tool: BuildingType }
-  | { type: 'UPDATE_GRID'; grid: Grid; cost: number }
+  | { type: 'APPLY_ACTION'; grid: Grid; cost: number; isBulldoze: boolean }
+  | { type: 'ACTION_FAILED'; error: string }
   | { type: 'SET_GOAL'; goal: AIGoal | null }
   | { type: 'SET_GENERATING_GOAL'; isGenerating: boolean }
   | { type: 'ADD_NEWS'; news: NewsItem }
@@ -62,6 +63,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       let updatedGoal = state.currentGoal;
       if (state.aiEnabled && state.currentGoal && !state.currentGoal.completed) {
         const g = state.currentGoal;
+        // Optimization: We could move this count logic to a memoized selector if it becomes slow
         const counts: Record<string, number> = {};
         state.grid.flat().forEach(t => counts[t.buildingType] = (counts[t.buildingType] || 0) + 1);
         
@@ -79,11 +81,24 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'SELECT_TOOL':
       return { ...state, selectedTool: action.tool };
 
-    case 'UPDATE_GRID':
+    case 'APPLY_ACTION':
       return {
         ...state,
         grid: action.grid,
-        stats: { ...state.stats, money: state.stats.money - action.cost }
+        stats: { ...state.stats, money: state.stats.money - action.cost },
+        lastSound: { key: action.isBulldoze ? 'bulldoze' : 'place', id: Date.now() }
+      };
+
+    case 'ACTION_FAILED':
+      return {
+        ...state,
+        lastSound: { key: 'error', id: Date.now() },
+        newsFeed: [...state.newsFeed.slice(-10), { 
+            id: Date.now().toString(), 
+            text: action.error, 
+            type: 'negative', 
+            timestamp: Date.now() 
+        }]
       };
 
     case 'SET_GOAL':
@@ -100,7 +115,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return {
         ...state,
         stats: { ...state.stats, money: state.stats.money + state.currentGoal.reward },
-        currentGoal: null
+        currentGoal: null,
+        lastSound: { key: 'reward', id: Date.now() }
       };
       
     case 'TRIGGER_SOUND':
@@ -124,88 +140,24 @@ interface GameContextProps {
 
 const GameContext = createContext<GameContextProps | undefined>(undefined);
 
-export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(gameReducer, initialState);
+// --- Game Loop Hook ---
+const useGameLoop = (
+  state: GameState, 
+  dispatch: React.Dispatch<Action>
+) => {
   const stateRef = useRef(state);
-  
   useEffect(() => { stateRef.current = state; }, [state]);
 
-  // --- Interaction Logic ---
-  
-  const handleTileClick = (x: number, y: number) => {
-    if (!state.gameStarted) return;
-    
-    const tile = state.grid[y][x];
-    const tool = state.selectedTool;
-    const currentMoney = state.stats.money;
-    let cost = 0;
-    let isValidAction = false;
-    let isBulldoze = false;
-
-    // 1. Validate Action
-    if (tool === BuildingType.None) {
-      // Demolish
-      if (tile.buildingType !== BuildingType.None) {
-        cost = DEMOLISH_COST;
-        isValidAction = true;
-        isBulldoze = true;
-      }
-    } else {
-      // Build
-      if (tile.buildingType === BuildingType.None) {
-        cost = BUILDINGS[tool].cost;
-        isValidAction = true;
-      }
-    }
-
-    // 2. Check Funds & Execute
-    if (isValidAction) {
-      if (currentMoney >= cost) {
-        dispatch({ type: 'TRIGGER_SOUND', key: isBulldoze ? 'bulldoze' : 'place' });
-        
-        const newGrid = state.grid.map(row => [...row]);
-        newGrid[y][x] = { 
-          ...tile, 
-          buildingType: tool,
-          // Reset variant if building, keep if bulldozing (or reset to 0)
-          variant: isBulldoze ? tile.variant : Math.floor(Math.random() * 100) 
-        };
-
-        dispatch({ type: 'UPDATE_GRID', grid: newGrid, cost });
-      } else {
-        dispatch({ type: 'TRIGGER_SOUND', key: 'error' });
-        dispatch({ 
-          type: 'ADD_NEWS', 
-          news: { 
-            id: Date.now().toString(), 
-            text: "Insufficient funds for this operation.", 
-            type: 'negative', 
-            timestamp: Date.now() 
-          }
-        });
-      }
-    }
-  };
-
-  const claimReward = () => {
-    if (stateRef.current.currentGoal?.completed) {
-      dispatch({ type: 'TRIGGER_SOUND', key: 'reward' });
-      dispatch({ type: 'CLAIM_REWARD' });
-    }
-  };
-
-  // --- Game Loops ---
-
-  // Simulation
+  // Simulation Tick
   useEffect(() => {
     if (!state.gameStarted) return;
     const interval = setInterval(() => dispatch({ type: 'TICK' }), TICK_RATE_MS);
     return () => clearInterval(interval);
-  }, [state.gameStarted]);
+  }, [state.gameStarted, dispatch]);
 
-  // AI Goals
+  // AI Mission Generator
   useEffect(() => {
-    const goalLoop = setInterval(async () => {
+    const loop = setInterval(async () => {
       const s = stateRef.current;
       if (!s.gameStarted || !s.aiEnabled || s.currentGoal || s.isGeneratingGoal) return;
       
@@ -214,18 +166,56 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (goal) dispatch({ type: 'SET_GOAL', goal });
       dispatch({ type: 'SET_GENERATING_GOAL', isGenerating: false });
     }, 5000);
-    return () => clearInterval(goalLoop);
-  }, []);
+    return () => clearInterval(loop);
+  }, [dispatch]);
 
-  // AI News
+  // AI News Generator
   useEffect(() => {
-    const newsLoop = setInterval(async () => {
+    const loop = setInterval(async () => {
        const s = stateRef.current;
        if (!s.gameStarted || !s.aiEnabled || Math.random() > 0.3) return;
        const news = await generateNewsEvent(s.stats);
        if (news) dispatch({ type: 'ADD_NEWS', news });
     }, TICK_RATE_MS * 4);
-    return () => clearInterval(newsLoop);
+    return () => clearInterval(loop);
+  }, [dispatch]);
+};
+
+// --- Provider ---
+
+export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [state, dispatch] = useReducer(gameReducer, initialState);
+  
+  // Attach Loops
+  useGameLoop(state, dispatch);
+
+  // Memoized Actions
+  const handleTileClick = useCallback((x: number, y: number) => {
+    if (!state.gameStarted) return;
+
+    // Delegate to Engine
+    const result = executeGridAction(
+      state.grid, 
+      state.stats, 
+      x, 
+      y, 
+      state.selectedTool
+    );
+
+    if (result.success && result.newGrid) {
+      dispatch({ 
+        type: 'APPLY_ACTION', 
+        grid: result.newGrid, 
+        cost: result.cost, 
+        isBulldoze: !!result.isBulldoze 
+      });
+    } else {
+      dispatch({ type: 'ACTION_FAILED', error: result.error || "Action failed" });
+    }
+  }, [state.gameStarted, state.grid, state.stats, state.selectedTool]);
+
+  const claimReward = useCallback(() => {
+    dispatch({ type: 'CLAIM_REWARD' });
   }, []);
 
   return (
