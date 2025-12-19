@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -14,30 +15,25 @@ const GameAudio = () => {
   const { play, stop } = useAudio();
   const lastSoundId = useRef<number>(0);
 
-  // Background Music
   useEffect(() => {
     if (state.gameStarted) {
-      // Fade in BGM over 2 seconds
       play('bgm', { fade: 2000 });
     } else {
-      // Fade out BGM over 1 second
       stop('bgm', { fade: 1000 });
     }
     return () => stop('bgm', { fade: 500 });
   }, [state.gameStarted, play, stop]);
 
-  // Sound Effects
   useEffect(() => {
     if (state.lastSound && state.lastSound.id !== lastSoundId.current) {
       lastSoundId.current = state.lastSound.id;
       const { key } = state.lastSound;
       
-      // Randomized pitch for repetitive actions to prevent listener fatigue
       if (key === 'place' || key === 'bulldoze') {
         play(key as SoundKey, { rate: 0.8 + Math.random() * 0.4 });
       } 
       else if (key === 'error') {
-        play('error', { rate: 0.8 }); // Lower pitch for errors
+        play('error', { rate: 0.8 });
       } 
       else if (key === 'reward') {
         play('reward', { volume: 0.6 });
@@ -55,14 +51,27 @@ const GameContainer = () => {
   const { state, dispatch } = useGame();
   const { play } = useAudio();
 
+  // Edge Case: Global listener to unlock audio if start screen was bypassed or on late user interaction
+  useEffect(() => {
+    const handleInteraction = () => {
+      resumeAudioContext();
+    };
+    window.addEventListener('mousedown', handleInteraction);
+    window.addEventListener('keydown', handleInteraction);
+    return () => {
+      window.removeEventListener('mousedown', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
+    };
+  }, []);
+
   const handleStart = (aiEnabled: boolean, sandboxMode: boolean) => {
     resumeAudioContext();
-    play('uiClick', { rate: 1.1 }); // Slightly higher pitch for start button
+    play('uiClick', { rate: 1.1 });
     dispatch({ type: 'START_GAME', aiEnabled, sandboxMode });
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden selection:bg-transparent bg-sky-900">
+    <div className="relative w-screen h-screen overflow-hidden selection:bg-transparent bg-slate-950">
       <GameAudio />
       <IsoMap />
       {state.gameStarted ? <HUD /> : <StartScreen onStart={handleStart} />}
@@ -70,6 +79,7 @@ const GameContainer = () => {
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
         .mask-image-b { -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%); }
+        * { user-select: none; }
       `}</style>
     </div>
   );

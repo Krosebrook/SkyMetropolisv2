@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -67,11 +66,11 @@ export interface SoundEvent {
 }
 
 export interface ActionResult {
-  success: boolean;
-  cost: number;
-  newGrid?: Grid;
-  error?: string;
-  isBulldoze?: boolean;
+  readonly success: boolean;
+  readonly cost: number;
+  readonly newGrid?: Grid;
+  readonly error?: string;
+  readonly isBulldoze?: boolean;
 }
 
 export interface GameState {

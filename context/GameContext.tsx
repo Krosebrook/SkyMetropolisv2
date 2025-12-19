@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -12,7 +11,7 @@ import { generateCityGoal, generateNewsEvent } from '../services/geminiService';
 
 const getInitialState = (): GameState => {
   const saved = storageRepository.load();
-  return {
+  const defaultInitial: GameState = {
     grid: cityService.createInitialGrid(),
     stats: { money: INITIAL_MONEY, population: 0, day: 1, happiness: 100 },
     selectedTool: BuildingType.Road,
@@ -22,9 +21,23 @@ const getInitialState = (): GameState => {
     isGeneratingGoal: false,
     newsFeed: [],
     lastSound: null,
-    ...saved,
-    gameStarted: false, // Reset session state - this overrides the earlier gameStarted if it was in saved
+    gameStarted: false,
   };
+
+  if (!saved) return defaultInitial;
+
+  // Validate saved data structure before merging
+  try {
+    return {
+      ...defaultInitial,
+      ...saved,
+      gameStarted: false, // Always force start screen on cold boot
+      lastSound: null     // Clear transient sound triggers
+    };
+  } catch (e) {
+    console.error("Storage corruption detected. Resetting to default.");
+    return defaultInitial;
+  }
 };
 
 const gameReducer = (state: GameState, action: GameAction): GameState => {
@@ -43,7 +56,7 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
         const isMet = 
             (g.targetType === 'money' && newStats.money >= g.targetValue) ||
             (g.targetType === 'population' && newStats.population >= g.targetValue) ||
-            (g.targetType === 'building_count' && g.buildingType && metrics.counts[g.buildingType] >= g.targetValue);
+            (g.targetType === 'building_count' && g.buildingType && (metrics.counts[g.buildingType] || 0) >= g.targetValue);
 
         if (isMet) updatedGoal = { ...g, completed: true };
       }
@@ -65,7 +78,6 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       return {
         ...state,
         lastSound: { key: 'error', id: Date.now() },
-        // Use type assertion 'as NewsType' to fix assignment compatibility error
         newsFeed: [{ id: Date.now().toString(), text: action.error, type: 'negative' as NewsType, timestamp: Date.now() }, ...state.newsFeed].slice(0, 10)
       };
 
@@ -91,6 +103,9 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       storageRepository.clear();
       return getInitialState();
 
+    case 'TRIGGER_SOUND':
+      return { ...state, lastSound: { key: action.key, id: Date.now() } };
+
     default:
       return state;
   }
@@ -109,49 +124,72 @@ const GameContext = createContext<GameContextValue | undefined>(undefined);
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, undefined, getInitialState);
   const stateRef = useRef(state);
-  useEffect(() => { stateRef.current = state; }, [state]);
-
-  // Persist on change
-  useEffect(() => {
-    storageRepository.save(state);
+  
+  // Use a ref for the latest state to avoid closure issues in async intervals
+  useEffect(() => { 
+    stateRef.current = state; 
   }, [state]);
 
-  // Game loop
+  // Persistence management
+  useEffect(() => {
+    if (state.gameStarted) {
+        storageRepository.save(state);
+    }
+  }, [state]);
+
+  // Main simulation tick
   useEffect(() => {
     if (!state.gameStarted) return;
     const interval = setInterval(() => dispatch({ type: 'TICK' }), TICK_RATE_MS);
     return () => clearInterval(interval);
   }, [state.gameStarted]);
 
-  // AI Services
+  // AI Strategic Advising - Resilient background loops
   useEffect(() => {
     if (!state.gameStarted || !state.aiEnabled) return;
     
+    let isSubscribed = true;
+
     const goalInt = setInterval(async () => {
       const s = stateRef.current;
       if (s.currentGoal || s.isGeneratingGoal) return;
+      
       dispatch({ type: 'SET_GENERATING_GOAL', isGenerating: true });
-      const goal = await generateCityGoal(s.stats, s.grid as any);
-      dispatch({ type: 'SET_GOAL', goal });
-      dispatch({ type: 'SET_GENERATING_GOAL', isGenerating: false });
+      try {
+        const goal = await generateCityGoal(s.stats, s.grid);
+        if (isSubscribed && goal) dispatch({ type: 'SET_GOAL', goal });
+      } catch (err) {
+        console.warn("AI Service: Goal fetch failed", err);
+      } finally {
+        if (isSubscribed) dispatch({ type: 'SET_GENERATING_GOAL', isGenerating: false });
+      }
     }, 15000);
 
     const newsInt = setInterval(async () => {
       if (Math.random() > 0.4) return;
-      const news = await generateNewsEvent(stateRef.current.stats);
-      if (news) dispatch({ type: 'ADD_NEWS', news });
+      try {
+        const news = await generateNewsEvent(stateRef.current.stats);
+        if (isSubscribed && news) dispatch({ type: 'ADD_NEWS', news });
+      } catch (err) {
+        console.warn("AI Service: News fetch failed", err);
+      }
     }, 20000);
 
-    return () => { clearInterval(goalInt); clearInterval(newsInt); };
+    return () => { 
+        isSubscribed = false;
+        clearInterval(goalInt); 
+        clearInterval(newsInt); 
+    };
   }, [state.gameStarted, state.aiEnabled]);
 
   const handleTileClick = useCallback((x: number, y: number) => {
     const s = stateRef.current;
     const result = cityService.executeAction(s.grid, s.stats, x, y, s.selectedTool, s.sandboxMode);
-    if (result.success) {
-      dispatch({ type: 'APPLY_ACTION', grid: result.newGrid, cost: result.cost, isBulldoze: result.isBulldoze });
+    
+    if (result.success && result.newGrid) {
+      dispatch({ type: 'APPLY_ACTION', grid: result.newGrid, cost: result.cost, isBulldoze: !!result.isBulldoze });
     } else {
-      dispatch({ type: 'ACTION_FAILED', error: result.error });
+      dispatch({ type: 'ACTION_FAILED', error: result.error || 'Operation failed' });
     }
   }, []);
 
@@ -166,6 +204,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useGame = () => {
   const context = useContext(GameContext);
-  if (!context) throw new Error('useGame must be used within GameProvider');
+  if (!context) {
+    throw new Error('useGame must be used within a GameProvider. Ensure your component is wrapped in <GameProvider>.');
+  }
   return context;
 };
