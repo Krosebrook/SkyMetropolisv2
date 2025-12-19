@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import IsoMap from './components/IsoMap';
 import HUD from './components/HUD';
@@ -12,6 +12,7 @@ import { resumeAudioContext, useAudio, SoundKey } from './hooks/useAudio';
 const GameAudio = () => {
   const { state } = useGame();
   const { play, stop } = useAudio();
+  const lastSoundId = useRef<number>(0);
 
   // Background Music
   useEffect(() => {
@@ -27,13 +28,13 @@ const GameAudio = () => {
 
   // Sound Effects
   useEffect(() => {
-    if (state.lastSound) {
+    if (state.lastSound && state.lastSound.id !== lastSoundId.current) {
+      lastSoundId.current = state.lastSound.id;
       const { key } = state.lastSound;
       
       // Randomized pitch for repetitive actions to prevent listener fatigue
       if (key === 'place' || key === 'bulldoze') {
-        const pitch = 0.8 + Math.random() * 0.4; // Pitch between 0.8 and 1.2
-        play(key as SoundKey, { rate: pitch });
+        play(key as SoundKey, { rate: 0.8 + Math.random() * 0.4 });
       } 
       else if (key === 'error') {
         play('error', { rate: 0.8 }); // Lower pitch for errors
@@ -54,10 +55,10 @@ const GameContainer = () => {
   const { state, dispatch } = useGame();
   const { play } = useAudio();
 
-  const handleStart = (aiEnabled: boolean) => {
+  const handleStart = (aiEnabled: boolean, sandboxMode: boolean) => {
     resumeAudioContext();
     play('uiClick', { rate: 1.1 }); // Slightly higher pitch for start button
-    dispatch({ type: 'START_GAME', aiEnabled });
+    dispatch({ type: 'START_GAME', aiEnabled, sandboxMode });
   };
 
   return (

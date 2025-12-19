@@ -1,8 +1,8 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
-*/
-import { useEffect, useRef } from 'react';
+ */
+import { useCallback, useRef } from 'react';
 // @ts-ignore
 import { Howl, Howler } from 'howler';
 
@@ -17,52 +17,42 @@ const SOUNDS = {
 
 export type SoundKey = keyof typeof SOUNDS;
 
-// Singleton cache
 const sfxCache: Partial<Record<SoundKey, Howl>> = {};
 
 const getSound = (key: SoundKey): Howl => {
   if (!sfxCache[key]) {
     sfxCache[key] = new Howl({
       src: [SOUNDS[key]],
-      volume: key === 'bgm' ? 0.0 : (key === 'error' ? 0.3 : 0.4), // Start BGM at 0 for fade-in
+      volume: key === 'bgm' ? 0.0 : 0.4,
       loop: key === 'bgm',
       html5: key === 'bgm',
-      onloaderror: (_id: number, error: unknown) => console.warn(`Failed to load sound: ${key}`, error),
     });
   }
   return sfxCache[key]!;
 };
 
 export const useAudio = () => {
-  const play = (sound: SoundKey, options?: { rate?: number, volume?: number, fade?: number }) => {
+  const play = useCallback((sound: SoundKey, options?: { rate?: number, volume?: number, fade?: number }) => {
     try {
       const s = getSound(sound);
-      
-      // Apply options
-      // Always set rate to default 1.0 if not specified to avoid state sticking from previous plays
       s.rate(options?.rate ?? 1.0);
-      
-      if (options?.volume) s.volume(options.volume);
+      if (options?.volume !== undefined) s.volume(options.volume);
 
       if (sound === 'bgm') {
         if (!s.playing()) {
           s.play();
-          if (options?.fade) {
-            s.fade(0, 0.15, options.fade); // Fade in to 0.15 volume
-          } else {
-            s.volume(0.15);
-          }
+          if (options?.fade) s.fade(0, 0.15, options.fade);
+          else s.volume(0.15);
         }
       } else {
-        // One-shots can overlap
         s.play();
       }
     } catch (e) {
-      console.warn("Audio play error", e);
+      console.warn("Audio Context Error:", e);
     }
-  };
+  }, []);
 
-  const stop = (sound: SoundKey, options?: { fade?: number }) => {
+  const stop = useCallback((sound: SoundKey, options?: { fade?: number }) => {
     try {
       const s = getSound(sound);
       if (options?.fade && s.playing()) {
@@ -71,20 +61,14 @@ export const useAudio = () => {
       } else {
         s.stop();
       }
-    } catch (e) {
-       console.warn("Audio stop error", e);
-    }
-  };
+    } catch (e) {}
+  }, []);
 
   return { play, stop };
 };
 
 export const resumeAudioContext = () => {
-  try {
-    if (Howler && Howler.ctx && Howler.ctx.state === 'suspended') {
-      Howler.ctx.resume();
-    }
-  } catch (e) {
-    console.error("Audio Context Resume Failed", e);
+  if (Howler && Howler.ctx && Howler.ctx.state === 'suspended') {
+    Howler.ctx.resume();
   }
 };

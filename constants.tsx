@@ -15,19 +15,19 @@ export const DEMOLISH_COST = 5;
 
 // Balance Constants
 export const GAME_BALANCE = {
-  POPULATION_PER_RESIDENTIAL: 50, // Max pop cap per house
-  POPULATION_DECAY: 10,           // Pop loss when homeless
-  TRAFFIC_PENALTY_THRESHOLD: 20,  // 1 road per X pop needed
+  POPULATION_PER_RESIDENTIAL: 50, 
+  POPULATION_DECAY: 10,           
+  TRAFFIC_PENALTY_THRESHOLD: 20,  
   HAPPINESS_BASE: 50,
-  HAPPINESS_PER_PARK: 2,
-  HAPPINESS_TRAFFIC_PENALTY: 10,
+  HAPPINESS_PER_PARK: 3,          // Buffed parks
+  HAPPINESS_TRAFFIC_PENALTY: 15,  // Increased penalty
 };
 
 // Building Registry
 export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
   [BuildingType.None]: {
     type: BuildingType.None,
-    cost: 0,
+    cost: DEMOLISH_COST, // Sync with constant
     name: 'Bulldoze',
     description: 'Clear land ($5)',
     color: '#ef4444',
