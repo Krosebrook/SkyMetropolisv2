@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { memo, useEffect, useCallback } from 'react';
+import React, { memo, useEffect, useCallback, useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { BuildingType, CityStats, AIGoal, NewsItem } from '../types';
 import { BUILDINGS } from '../constants';
@@ -86,7 +86,6 @@ const Toolbar = memo(({ money, selectedTool, sandboxMode, onSelect }: any) => {
                         <div className="w-4 h-4 sm:w-6 sm:h-6 rounded bg-current mb-1 transition-transform group-hover:scale-110" style={{color: b.color}}></div>
                         <span className="text-[8px] sm:text-[9px] font-bold text-slate-300 uppercase">{b.name}</span>
                         <span className="text-[8px] sm:text-[9px] text-slate-500 font-mono">{sandboxMode && b.type !== BuildingType.None ? 'Free' : `$${b.cost}`}</span>
-                        {/* Keyboard shortcut hint */}
                         <div className="absolute top-1 right-1.5 text-[8px] text-slate-600 font-bold">{idx + 1}</div>
                     </button>
                 );
@@ -125,6 +124,7 @@ const NewsTicker = memo(({ news }: { news: readonly NewsItem[] }) => (
 const HUD = () => {
     const { state, dispatch } = useGame();
     const { stats, selectedTool, currentGoal, aiEnabled, newsFeed, isGeneratingGoal, sandboxMode } = state;
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
 
     // Keyboard Shortcuts
     useEffect(() => {
@@ -148,10 +148,21 @@ const HUD = () => {
         dispatch({ type: 'CLAIM_REWARD' });
     }, [dispatch]);
 
+    const handleReset = useCallback(() => {
+        if (showResetConfirm) {
+            dispatch({ type: 'RESET_GAME' });
+            setShowResetConfirm(false);
+            window.location.reload();
+        } else {
+            setShowResetConfirm(true);
+            setTimeout(() => setShowResetConfirm(false), 3000);
+        }
+    }, [showResetConfirm, dispatch]);
+
     return (
         <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 sm:p-8 z-20 font-sans select-none overflow-hidden">
             <header className="flex flex-col sm:flex-row justify-between items-start gap-6 animate-in fade-in slide-in-from-top duration-700">
-                <div className="bg-slate-950/90 p-4 rounded-[2rem] border border-slate-700/50 shadow-2xl backdrop-blur-2xl flex items-center gap-6 sm:gap-12 pointer-events-auto ring-1 ring-white/10">
+                <div className="bg-slate-950/90 p-4 rounded-[2rem] border border-slate-700/50 shadow-2xl backdrop-blur-2xl flex items-center gap-6 sm:gap-12 pointer-events-auto ring-1 ring-white/10 relative">
                     <StatBox id="stat-funds" label="Funds" value={sandboxMode ? '∞' : `$${stats.money.toLocaleString()}`} color="text-emerald-400" />
                     <div className="w-px h-8 bg-slate-800" aria-hidden="true"></div>
                     <StatBox id="stat-pop" label="Population" value={stats.population.toLocaleString()} color="text-cyan-400" />
@@ -159,6 +170,18 @@ const HUD = () => {
                     <StatBox id="stat-happy" label="Happiness" value={`${Math.round(stats.happiness)}%`} color="text-rose-400" />
                     <div className="hidden sm:block w-px h-8 bg-slate-800" aria-hidden="true"></div>
                     <StatBox id="stat-day" label="Day" value={String(stats.day)} color="text-white/90" />
+                    
+                    {/* Emergency Reset Button */}
+                    <button 
+                        onClick={handleReset}
+                        className={`absolute -top-3 -right-3 w-8 h-8 rounded-full border border-slate-700 shadow-xl flex items-center justify-center transition-all ${showResetConfirm ? 'bg-red-500 scale-110 border-red-400' : 'bg-slate-900 hover:bg-slate-800'}`}
+                        title="Restart Game"
+                    >
+                        <svg className={`w-4 h-4 text-white ${showResetConfirm ? 'animate-spin' : 'opacity-40'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {showResetConfirm && <span className="absolute -bottom-8 right-0 text-[8px] bg-red-500 px-2 py-1 rounded whitespace-nowrap font-black uppercase text-white shadow-lg">Confirm Reset</span>}
+                    </button>
                 </div>
 
                 {aiEnabled && (

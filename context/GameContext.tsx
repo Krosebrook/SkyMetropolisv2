@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -26,13 +27,12 @@ const getInitialState = (): GameState => {
 
   if (!saved) return defaultInitial;
 
-  // Validate saved data structure before merging
   try {
     return {
       ...defaultInitial,
       ...saved,
-      gameStarted: false, // Always force start screen on cold boot
-      lastSound: null     // Clear transient sound triggers
+      gameStarted: false,
+      lastSound: null    
     };
   } catch (e) {
     console.error("Storage corruption detected. Resetting to default.");
@@ -49,7 +49,6 @@ const gameReducer = (state: GameState, action: GameAction): GameState => {
       const newStats = cityService.calculateNextDay(state.stats, state.grid);
       let updatedGoal = state.currentGoal;
       
-      // Goal completion check
       if (state.aiEnabled && state.currentGoal && !state.currentGoal.completed) {
         const metrics = cityService.aggregateMetrics(state.grid);
         const g = state.currentGoal;
@@ -125,31 +124,28 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [state, dispatch] = useReducer(gameReducer, undefined, getInitialState);
   const stateRef = useRef(state);
   
-  // Use a ref for the latest state to avoid closure issues in async intervals
   useEffect(() => { 
     stateRef.current = state; 
   }, [state]);
 
-  // Persistence management
   useEffect(() => {
     if (state.gameStarted) {
         storageRepository.save(state);
     }
   }, [state]);
 
-  // Main simulation tick
   useEffect(() => {
     if (!state.gameStarted) return;
     const interval = setInterval(() => dispatch({ type: 'TICK' }), TICK_RATE_MS);
     return () => clearInterval(interval);
   }, [state.gameStarted]);
 
-  // AI Strategic Advising - Resilient background loops
   useEffect(() => {
     if (!state.gameStarted || !state.aiEnabled) return;
     
     let isSubscribed = true;
 
+    // Increased goal interval from 15s to 30s
     const goalInt = setInterval(async () => {
       const s = stateRef.current;
       if (s.currentGoal || s.isGeneratingGoal) return;
@@ -163,7 +159,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         if (isSubscribed) dispatch({ type: 'SET_GENERATING_GOAL', isGenerating: false });
       }
-    }, 15000);
+    }, 30000);
 
     const newsInt = setInterval(async () => {
       if (Math.random() > 0.4) return;
@@ -173,7 +169,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (err) {
         console.warn("AI Service: News fetch failed", err);
       }
-    }, 20000);
+    }, 25000);
 
     return () => { 
         isSubscribed = false;

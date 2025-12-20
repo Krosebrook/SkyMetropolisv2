@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -10,6 +11,7 @@ export enum BuildingType {
   Commercial = 'Commercial',
   Industrial = 'Industrial',
   Park = 'Park',
+  Water = 'Water',
 }
 
 export type NewsType = 'positive' | 'negative' | 'neutral';

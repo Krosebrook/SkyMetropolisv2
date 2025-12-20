@@ -9,10 +9,9 @@ import { BUILDINGS, GRID_SIZE, GAME_BALANCE, DEMOLISH_COST } from '../constants'
 export const cityEngine = {
   calculateNextDay(currentStats: CityStats, grid: Grid): CityStats {
     const metrics = this.aggregateMetrics(grid);
-    const happiness = this.calculateHappiness(currentStats.population, metrics.counts);
+    const happiness = this.calculateHappiness(currentStats.population, metrics.counts, grid);
     const population = this.calculatePopulation(currentStats.population, metrics.grossPopGrowth, metrics.counts, happiness);
 
-    // Edge Case: Financial protection - Clamping money to 0 unless sandbox
     const nextMoney = currentStats.money + metrics.dailyIncome;
 
     return {
@@ -26,11 +25,12 @@ export const cityEngine = {
   aggregateMetrics(grid: Grid) {
     const counts: Record<BuildingType, number> = {
       [BuildingType.None]: 0,
+      [BuildingType.Road]: 0,
       [BuildingType.Residential]: 0,
       [BuildingType.Commercial]: 0,
       [BuildingType.Industrial]: 0,
       [BuildingType.Park]: 0,
-      [BuildingType.Road]: 0,
+      [BuildingType.Water]: 0,
     };
 
     let dailyIncome = 0;
@@ -59,26 +59,24 @@ export const cityEngine = {
     const resCount = counts[BuildingType.Residential] || 0;
     const cap = resCount * GAME_BALANCE.POPULATION_PER_RESIDENTIAL;
     
-    // Happiness multiplier between 0.5 and 1.5
     const happinessMultiplier = 0.5 + (Math.max(0, Math.min(100, happiness)) / 100);
     const parkBonus = (counts[BuildingType.Park] || 0) * 0.5;
+    const waterBonus = (counts[BuildingType.Water] || 0) * 0.2;
     
-    const growth = Math.floor((grossGrowth + parkBonus) * happinessMultiplier);
+    const growth = Math.floor((grossGrowth + parkBonus + waterBonus) * happinessMultiplier);
 
     let nextPop = currentPop + growth;
     
-    // Decay if no housing exists or overcrowding
     if (resCount === 0 && currentPop > 0) {
       nextPop = Math.max(0, currentPop - GAME_BALANCE.POPULATION_DECAY);
     } else if (nextPop > cap) {
-      // Overcrowding penalty - pop slowly settles to cap
       nextPop = currentPop > cap ? currentPop - 1 : cap;
     }
     
     return Math.max(0, nextPop);
   },
 
-  calculateHappiness(population: number, counts: Record<BuildingType, number>): number {
+  calculateHappiness(population: number, counts: Record<BuildingType, number>, grid: Grid): number {
     const roadsNeeded = population / GAME_BALANCE.TRAFFIC_PENALTY_THRESHOLD;
     const roadCount = counts[BuildingType.Road] || 0;
     
@@ -87,8 +85,9 @@ export const cityEngine = {
       : 0;
       
     const parkBonus = (counts[BuildingType.Park] || 0) * GAME_BALANCE.HAPPINESS_PER_PARK;
+    const waterBonus = (counts[BuildingType.Water] || 0) * GAME_BALANCE.HAPPINESS_PER_WATER;
     
-    const total = GAME_BALANCE.HAPPINESS_BASE + parkBonus - trafficPenalty;
+    const total = GAME_BALANCE.HAPPINESS_BASE + parkBonus + waterBonus - trafficPenalty;
     return Math.min(100, Math.max(0, total));
   },
 
@@ -100,7 +99,6 @@ export const cityEngine = {
     const tile = grid[y][x];
     const isBulldoze = tool === BuildingType.None;
     
-    // Cost logic with safety
     const buildingConfig = BUILDINGS[tool];
     if (!buildingConfig) return { success: false, cost: 0, error: 'Invalid building type.' };
     
@@ -141,23 +139,32 @@ export const cityEngine = {
     );
 
     const mid = Math.floor(GRID_SIZE / 2);
-    const mainRoads = [
-        { x: mid, y: mid, id: 'intersection-1' },
-        { x: mid - 1, y: mid, id: 'main-road-texture' },
-        { x: mid + 1, y: mid, id: 'road-segment-a' },
-        { x: mid, y: mid - 1 },
-        { x: mid, y: mid + 1 }
-    ];
-
-    mainRoads.forEach(r => {
-        if (grid[r.y] && grid[r.y][r.x]) {
-            grid[r.y][r.x] = { 
-                ...grid[r.y][r.x], 
-                buildingType: BuildingType.Road, 
-                customId: (r as any).id 
-            };
+    
+    // Create central main roads - SCALED DOWN from +/- 10 to +/- 5
+    for (let i = mid - 5; i <= mid + 5; i++) {
+        grid[mid][i] = { ...grid[mid][i], buildingType: BuildingType.Road };
+        grid[i][mid] = { ...grid[i][mid], buildingType: BuildingType.Road };
+    }
+    
+    // Create a Central Lake - SCALED DOWN from 5x5 to 3x3
+    for (let y = mid - 3; y <= mid - 1; y++) {
+        for (let x = mid + 1; x <= mid + 3; x++) {
+            grid[y][x] = { ...grid[y][x], buildingType: BuildingType.Water };
         }
-    });
+    }
+
+    // Create a Forest - SCALED DOWN from 5x5 to 3x3
+    for (let y = mid + 1; y <= mid + 3; y++) {
+        for (let x = mid - 3; x <= mid - 1; x++) {
+            grid[y][x] = { ...grid[y][x], buildingType: BuildingType.Park };
+        }
+    }
+
+    // Starter buildings
+    grid[mid+2][mid+2] = { ...grid[mid+2][mid+2], buildingType: BuildingType.Residential };
+    grid[mid-2][mid-2] = { ...grid[mid-2][mid-2], buildingType: BuildingType.Commercial };
+
+    grid[mid][mid] = { ...grid[mid][mid], customId: 'intersection-1', buildingType: BuildingType.Road };
     
     return grid as unknown as Grid;
   }

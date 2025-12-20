@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 // @ts-ignore
 import { Howl, Howler } from 'howler';
 
@@ -17,6 +17,7 @@ const SOUNDS = {
 
 export type SoundKey = keyof typeof SOUNDS;
 
+// Global singleton cache for Howl instances to prevent leaks
 const sfxCache: Partial<Record<SoundKey, Howl>> = {};
 
 const getSound = (key: SoundKey): Howl => {
@@ -25,7 +26,10 @@ const getSound = (key: SoundKey): Howl => {
       src: [SOUNDS[key]],
       volume: key === 'bgm' ? 0.0 : 0.4,
       loop: key === 'bgm',
-      html5: key === 'bgm',
+      // Edge Case: Pool exhaustion. Switching html5 to false for small assets
+      // to rely on Web Audio API which handles concurrent voices more robustly.
+      html5: false, 
+      preload: true,
     });
   }
   return sfxCache[key]!;
@@ -35,16 +39,24 @@ export const useAudio = () => {
   const play = useCallback((sound: SoundKey, options?: { rate?: number, volume?: number, fade?: number }) => {
     try {
       const s = getSound(sound);
-      s.rate(options?.rate ?? 1.0);
-      if (options?.volume !== undefined) s.volume(options.volume);
+      
+      // Safety check for state
+      if (Howler.ctx && Howler.ctx.state === 'suspended') {
+        Howler.ctx.resume();
+      }
 
+      s.rate(options?.rate ?? 1.0);
+      
       if (sound === 'bgm') {
         if (!s.playing()) {
           s.play();
-          if (options?.fade) s.fade(0, 0.15, options.fade);
-          else s.volume(0.15);
+          const targetVol = options?.volume ?? 0.15;
+          if (options?.fade) s.fade(0, targetVol, options.fade);
+          else s.volume(targetVol);
         }
       } else {
+        // Overlay standard SFX
+        if (options?.volume !== undefined) s.volume(options.volume);
         s.play();
       }
     } catch (e) {
@@ -54,10 +66,12 @@ export const useAudio = () => {
 
   const stop = useCallback((sound: SoundKey, options?: { fade?: number }) => {
     try {
-      const s = getSound(sound);
+      const s = sfxCache[sound];
+      if (!s) return;
+
       if (options?.fade && s.playing()) {
         s.fade(s.volume(), 0, options.fade);
-        setTimeout(() => s.stop(), options.fade);
+        s.once('fade', () => s.stop());
       } else {
         s.stop();
       }
@@ -69,6 +83,6 @@ export const useAudio = () => {
 
 export const resumeAudioContext = () => {
   if (Howler && Howler.ctx && Howler.ctx.state === 'suspended') {
-    Howler.ctx.resume();
+    Howler.ctx.resume().catch(e => console.debug("Context resume suppressed", e));
   }
 };

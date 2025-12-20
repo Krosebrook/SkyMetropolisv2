@@ -15,8 +15,7 @@
     "three": "^0.173.0",
     "@react-three/fiber": "^9.0.0",
     "@react-three/drei": "^10.0.0",
-    "howler": "^2.2.4",
-    "transparent": "^0.0.1"
+    "howler": "^2.2.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

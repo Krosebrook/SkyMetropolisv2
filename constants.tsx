@@ -1,33 +1,35 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 import { BuildingConfig, BuildingType } from './types';
 
-// World Configuration
-export const GRID_SIZE = 16;
+// World Configuration - Area increased to 48x48
+export const GRID_SIZE = 48;
 export const WORLD_OFFSET = GRID_SIZE / 2 - 0.5;
 
 // Simulation Configuration
 export const TICK_RATE_MS = 2000; 
-export const INITIAL_MONEY = 1500;
+export const INITIAL_MONEY = 5000; // Increased starting money for huge map
 export const DEMOLISH_COST = 5;
 
 // Balance Constants
 export const GAME_BALANCE = {
-  POPULATION_PER_RESIDENTIAL: 50, 
-  POPULATION_DECAY: 10,           
-  TRAFFIC_PENALTY_THRESHOLD: 20,  
-  HAPPINESS_BASE: 50,
-  HAPPINESS_PER_PARK: 3,          // Buffed parks
-  HAPPINESS_TRAFFIC_PENALTY: 15,  // Increased penalty
+  POPULATION_PER_RESIDENTIAL: 60, 
+  POPULATION_DECAY: 15,           
+  TRAFFIC_PENALTY_THRESHOLD: 25,  
+  HAPPINESS_BASE: 60,
+  HAPPINESS_PER_PARK: 6,          
+  HAPPINESS_PER_WATER: 4,         
+  HAPPINESS_TRAFFIC_PENALTY: 10,  
 };
 
 // Building Registry
 export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
   [BuildingType.None]: {
     type: BuildingType.None,
-    cost: DEMOLISH_COST, // Sync with constant
+    cost: DEMOLISH_COST,
     name: 'Bulldoze',
     description: 'Clear land ($5)',
     color: '#ef4444',
@@ -72,11 +74,20 @@ export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
   },
   [BuildingType.Park]: {
     type: BuildingType.Park,
-    cost: 50,
+    cost: 75,
     name: 'Park',
-    description: '+Happiness',
+    description: '+Happiness & Wildlife',
     color: '#4ade80',
     popGen: 1,
     incomeGen: -2,
+  },
+  [BuildingType.Water]: {
+    type: BuildingType.Water,
+    cost: 30,
+    name: 'Water',
+    description: 'Deep Blue Glow',
+    color: '#06b6d4',
+    popGen: 0,
+    incomeGen: 0,
   },
 };

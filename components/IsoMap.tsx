@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -11,7 +12,7 @@ import { BuildingType, Grid } from '../types';
 import { BUILDINGS, WORLD_OFFSET } from '../constants';
 import { ProceduralBuilding } from './World/BuildingAssets';
 import { RoadMarkings, TrafficLight, useRoadMaterials, ROUNDABOUT_THRESHOLD } from './World/RoadAssets';
-import { TrafficSystem, EnvironmentSystem } from './World/WorldSystems';
+import { TrafficSystem, PedestrianSystem, WildlifeSystem, EnvironmentSystem } from './World/WorldSystems';
 
 // --- Helpers ---
 
@@ -21,8 +22,7 @@ const gridToWorld = (x: number, y: number): [number, number, number] => [x - WOR
 
 const GroundTile = memo(({ x, y, type, onClick, onHover }: any) => {
     const [wx, _, wz] = gridToWorld(x, y);
-    // Darker, more contrasty base
-    const color = type === BuildingType.None ? '#14532d' : type === BuildingType.Road ? '#020617' : '#334155';
+    const color = type === BuildingType.None ? '#14532d' : type === BuildingType.Road ? '#020617' : type === BuildingType.Water ? '#083344' : '#334155';
     const height = 0.5;
 
     return (
@@ -124,6 +124,8 @@ const GameScene = () => {
             </group>
 
             <TrafficSystem grid={grid} />
+            <PedestrianSystem grid={grid} />
+            <WildlifeSystem grid={grid} />
             <EnvironmentSystem />
 
             {hovered && <SelectionCursor x={hovered.x} y={hovered.y} color={cursorColor} />}
@@ -141,14 +143,13 @@ const GameScene = () => {
                 </group>
             )}
 
-            {/* Subtle AO shadow for buildings to ground contact */}
             <ContactShadows 
                 position={[0, -0.3, 0]} 
-                opacity={0.4} 
-                scale={40} 
-                blur={2} 
-                far={4} 
-                resolution={1024} 
+                opacity={0.25} 
+                scale={120} 
+                blur={3} 
+                far={10} 
+                resolution={512} 
                 color="#000000" 
             />
         </>
@@ -164,32 +165,33 @@ const IsoMap = () => {
         gl={{ 
             antialias: true, 
             toneMapping: THREE.ACESFilmicToneMapping,
-            outputEncoding: THREE.sRGBEncoding
+            outputEncoding: THREE.sRGBEncoding,
+            preserveDrawingBuffer: false
         }}
       >
-        <OrthographicCamera makeDefault zoom={45} position={[45, 45, 45]} near={-100} far={500} />
+        <OrthographicCamera makeDefault zoom={20} position={[100, 100, 100]} near={-500} far={2500} />
         <MapControls 
             enableRotate={true} 
-            minZoom={15} 
-            maxZoom={120} 
+            minZoom={4} 
+            maxZoom={150} 
             maxPolarAngle={Math.PI/2.05} 
             dampingFactor={0.08}
         />
         
-        <ambientLight intensity={1.5} color="#e2e8f0" />
+        <ambientLight intensity={1.5} color="#f8fafc" />
         <directionalLight 
-            position={[30, 50, 30]} 
-            intensity={3.5} 
+            position={[80, 120, 80]} 
+            intensity={4.0} 
             castShadow 
             shadow-mapSize={[4096, 4096]} 
-            shadow-camera-left={-45}
-            shadow-camera-right={45}
-            shadow-camera-top={45}
-            shadow-camera-bottom={-45}
-            shadow-bias={-0.0002}
-            shadow-radius={1}
+            shadow-camera-left={-100}
+            shadow-camera-right={100}
+            shadow-camera-top={100}
+            shadow-camera-bottom={-100}
+            shadow-bias={-0.0001}
+            shadow-normalBias={0.04}
         />
-        <Environment preset="city" intensity={0.8} />
+        <Environment preset="city" intensity={0.5} />
         
         <GameScene />
       </Canvas>
