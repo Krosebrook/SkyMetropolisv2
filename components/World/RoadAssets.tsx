@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -196,9 +197,6 @@ export const useRoadMaterials = (style: RoadStyle): RoadMaterials => {
     }, [style]);
 };
 
-/**
- * Resolves the road topology and intersection type based on neighbors and variants.
- */
 export const getRoadTopologyData = (x: number, y: number, grid: Grid, variant: number) => {
     const isRoad = (gx: number, gy: number) => {
         if (gx < 0 || gy < 0 || gx >= GRID_SIZE || gy >= GRID_SIZE) return false;
@@ -212,12 +210,9 @@ export const getRoadTopologyData = (x: number, y: number, grid: Grid, variant: n
         (isRoad(x, y-1) ? MASKS.UP : 0);
 
     let topology = BASIC_TOPOLOGY[mask] || { type: 'straight', rotation: 0 };
-    
-    // Extensible Intersection Rules
     if (mask === 15 && variant > ROUNDABOUT_THRESHOLD) {
         topology = { type: 'roundabout', rotation: 0 };
     }
-    
     return { ...topology, mask };
 };
 
@@ -230,7 +225,8 @@ const RoadBase = ({ materials, isSkirt = true }: { materials: RoadMaterials, isS
     </>
 );
 
-const SidewalkLayout = ({ materials, type }: { materials: RoadMaterials, type: RoadTopology }) => {
+const SidewalkLayout = ({ materials, type, style }: { materials: RoadMaterials, type: RoadTopology, style: RoadStyle }) => {
+    const isModern = style === 'modern' || style === 'modern-worn' || style === 'brick';
     if (type === 'corner') {
         return (
             <>
@@ -242,11 +238,12 @@ const SidewalkLayout = ({ materials, type }: { materials: RoadMaterials, type: R
         );
     }
     if (type === 'straight') {
+        const swOffset = isModern ? 0.44 : 0.42;
         return (
             <>
-                <mesh geometry={ROAD_GEO.sidewalkStraight} material={materials.sidewalk} position={[0.42, 0, 0.02]} receiveShadow />
+                <mesh geometry={ROAD_GEO.sidewalkStraight} material={materials.sidewalk} position={[swOffset, 0, 0.02]} receiveShadow />
                 <group rotation={[0, 0, Math.PI]}>
-                    <mesh geometry={ROAD_GEO.sidewalkStraight} material={materials.sidewalk} position={[0.42, 0, 0.02]} receiveShadow />
+                    <mesh geometry={ROAD_GEO.sidewalkStraight} material={materials.sidewalk} position={[swOffset, 0, 0.02]} receiveShadow />
                 </group>
             </>
         );
@@ -254,14 +251,16 @@ const SidewalkLayout = ({ materials, type }: { materials: RoadMaterials, type: R
     return null;
 };
 
-const FurnitureSet = ({ materials, variant }: { materials: RoadMaterials, variant: number }) => {
-    const showBench = variant % 3 === 0;
-    const showLamp = variant % 5 === 0;
+const FurnitureSet = ({ materials, variant, style }: { materials: RoadMaterials, variant: number, style: RoadStyle }) => {
+    const showBench = variant % 4 === 0;
+    const showLamp = variant % 6 === 0;
+    const isModern = style === 'modern' || style === 'modern-worn' || style === 'brick';
+    const offset = isModern ? 0.46 : 0.42;
 
     return (
         <group>
             {showBench && (
-                <group position={[0.42, 0.25, 0]} rotation={[Math.PI / 2, 0, Math.PI / 2]}>
+                <group position={[offset, 0.25, 0]} rotation={[Math.PI / 2, 0, Math.PI / 2]}>
                     <mesh geometry={ROAD_GEO.benchSeat} material={materials.bench} position={[0, 0, 0.035]} />
                     <mesh geometry={ROAD_GEO.benchBack} material={materials.bench} position={[0, 0.03, 0.07]} rotation={[-Math.PI / 8, 0, 0]} />
                     <mesh geometry={ROAD_GEO.benchLeg} material={materials.pole} position={[0.045, 0, 0.018]} />
@@ -269,11 +268,11 @@ const FurnitureSet = ({ materials, variant }: { materials: RoadMaterials, varian
                 </group>
             )}
             {showLamp && (
-                <group position={[0.42, -0.35, 0]} rotation={[Math.PI / 2, 0, Math.PI / 2]}>
+                <group position={[offset, -0.35, 0]} rotation={[Math.PI / 2, 0, Math.PI / 2]}>
                     <mesh geometry={ROAD_GEO.lampPole} material={materials.lamp} position={[0, 0, 0.25]} />
                     <mesh geometry={ROAD_GEO.lampHead} material={materials.lamp} position={[0, -0.06, 0.5]} rotation={[0.2, 0, 0]} castShadow />
                     <mesh geometry={ROAD_GEO.lightLens} material={materials.lightYellow} position={[0, -0.06, 0.48]} rotation={[Math.PI / 2, 0, 0]} scale={[0.9, 0.9, 0.9]} />
-                    <pointLight position={[0, -0.1, 0.45]} intensity={0.5} distance={1.5} color={materials.lightYellow.color} />
+                    <pointLight position={[0, -0.1, 0.45]} intensity={0.5} distance={2.5} color={materials.lightYellow.color} />
                 </group>
             )}
         </group>
@@ -286,10 +285,10 @@ const TopologyStraight = ({ ctx }: { ctx: RoadContextType }) => (
     <group>
         <RoadBase materials={ctx.materials} />
         <Markings ctx={ctx} type="straight" />
-        <SidewalkLayout materials={ctx.materials} type="straight" />
-        <FurnitureSet materials={ctx.materials} variant={ctx.variant} />
+        <SidewalkLayout materials={ctx.materials} type="straight" style={ctx.style} />
+        <FurnitureSet materials={ctx.materials} variant={ctx.variant} style={ctx.style} />
         <group rotation={[0, 0, Math.PI]}>
-            <FurnitureSet materials={ctx.materials} variant={ctx.variant + 1} />
+            <FurnitureSet materials={ctx.materials} variant={ctx.variant + 1} style={ctx.style} />
         </group>
     </group>
 );
@@ -298,7 +297,7 @@ const TopologyCorner = ({ ctx }: { ctx: RoadContextType }) => (
     <group>
         <RoadBase materials={ctx.materials} />
         <Markings ctx={ctx} type="corner" />
-        <SidewalkLayout materials={ctx.materials} type="corner" />
+        <SidewalkLayout materials={ctx.materials} type="corner" style={ctx.style} />
     </group>
 );
 
@@ -353,8 +352,6 @@ const TopologyRoundabout = ({ ctx }: { ctx: RoadContextType }) => (
         <mesh geometry={ROAD_GEO.roundaboutBase} material={ctx.materials.surface} receiveShadow />
         <Markings ctx={ctx} type="roundabout" />
         <mesh geometry={ROAD_GEO.roundaboutCenter} material={ctx.materials.island} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 0.06]} castShadow receiveShadow />
-        
-        {/* Landmark Monument */}
         <group position={[0, 0, 0.12]}>
              <mesh position={[0, 0, 0.12]} rotation={[Math.PI / 2, 0, 0]} castShadow>
                  <cylinderGeometry args={[0.08, 0.12, 0.25, 12]} />
@@ -382,7 +379,6 @@ const TOPOLOGY_COMPONENTS: Record<RoadTopology, React.FC<{ ctx: RoadContextType 
 
 const Markings = ({ ctx, type }: { ctx: RoadContextType, type: RoadTopology }) => {
     const { materials, widthScale, variant } = ctx;
-    
     if (type === 'straight') {
         const isCrossing = variant % 10 === 0;
         return (
@@ -405,13 +401,9 @@ const Markings = ({ ctx, type }: { ctx: RoadContextType, type: RoadTopology }) =
             </group>
         );
     }
-    
     if (type === 'corner') {
-        return (
-            <mesh geometry={ROAD_GEO.corner} material={materials.line} position={[0, 0, Z_OFFSETS.MARKING_BASE]} scale={[widthScale, widthScale, 1]} />
-        );
+        return <mesh geometry={ROAD_GEO.corner} material={materials.line} position={[0, 0, Z_OFFSETS.MARKING_BASE]} scale={[widthScale, widthScale, 1]} />;
     }
-
     if (type === 'roundabout') {
         return (
             <group position={[0, 0, Z_OFFSETS.MARKING_BASE]}>
@@ -424,7 +416,6 @@ const Markings = ({ ctx, type }: { ctx: RoadContextType, type: RoadTopology }) =
             </group>
         );
     }
-
     return null;
 };
 
@@ -438,7 +429,6 @@ export const TrafficLight = ({ materials, position = [0.4, 0.4, 0], rotation = 0
     useFrame((state) => {
         const time = state.clock.getElapsedTime();
         const cycle = (time + (side === 1 ? 5 : 0)) % 10;
-        
         if (redRef.current && yellowRef.current && greenRef.current) {
             redRef.current.material = cycle >= 5 ? materials.lightRed : materials.lightOff;
             yellowRef.current.material = (cycle >= 4 && cycle < 5) ? materials.lightYellow : materials.lightOff;
@@ -461,7 +451,6 @@ export const TrafficLight = ({ materials, position = [0.4, 0.4, 0], rotation = 0
 
 export const RoadMarkings = React.memo(({ x, y, grid, yOffset, variant = 0, customId }: { x: number; y: number; grid: Grid; yOffset: number; variant?: number, customId?: string }) => {
     const topology = useMemo(() => getRoadTopologyData(x, y, grid, variant), [x, y, grid, variant]);
-
     const style: RoadStyle = useMemo(() => {
         if (customId === 'main-road-texture') return 'modern-worn';
         if (variant >= 80) return 'modern';
@@ -473,9 +462,7 @@ export const RoadMarkings = React.memo(({ x, y, grid, yOffset, variant = 0, cust
     const materials = useRoadMaterials(style);
     const widthScale = style === 'modern' || style === 'modern-worn' ? 1.15 : 1.05;
     const ctx: RoadContextType = { style, variant, widthScale, materials };
-    
     const RenderComponent = TOPOLOGY_COMPONENTS[topology.type] || TOPOLOGY_COMPONENTS.straight;
-
     const decorSeed = ( (x + 1) * 37 + (y + 1) * 13 + variant) % 100;
     const showManhole = ( (x + 1) + (y + 1) ) % 11 === 0;
     const showPatch = (style === 'worn' || style === 'modern-worn') && ( (x + 1) * (y + 1) ) % 7 === 0;
@@ -485,30 +472,18 @@ export const RoadMarkings = React.memo(({ x, y, grid, yOffset, variant = 0, cust
             <group rotation={[0, 0, topology.rotation]}>
                 <RenderComponent ctx={ctx} />
             </group>
-            
             {showPatch && (
                  <mesh 
-                    geometry={ROAD_GEO.patch} 
-                    material={materials.decor.patch} 
-                    position={[
-                        ((decorSeed % 10) - 5) / 25, 
-                        (((decorSeed / 10) | 0) % 10 - 5) / 25, 
-                        Z_OFFSETS.DECOR_PATCH
-                    ]} 
+                    geometry={ROAD_GEO.patch} material={materials.decor.patch} 
+                    position={[((decorSeed % 10) - 5) / 25, (((decorSeed / 10) | 0) % 10 - 5) / 25, Z_OFFSETS.DECOR_PATCH]} 
                     rotation={[0, 0, (decorSeed / 100) * Math.PI * 2]} 
                     scale={[0.75 + (decorSeed % 5) / 10, 0.75 + (decorSeed % 7) / 10, 1]}
                  />
             )}
-            
             {showManhole && (
                 <mesh 
-                    geometry={ROAD_GEO.manhole} 
-                    material={materials.decor.manhole} 
-                    position={[
-                        -0.2 + ((decorSeed % 4) - 2) / 25, 
-                        0.2 + (((decorSeed / 4) | 0) % 4 - 2) / 25, 
-                        Z_OFFSETS.DECOR_MANHOLE
-                    ]} 
+                    geometry={ROAD_GEO.manhole} material={materials.decor.manhole} 
+                    position={[-0.2 + ((decorSeed % 4) - 2) / 25, 0.2 + (((decorSeed / 4) | 0) % 4 - 2) / 25, Z_OFFSETS.DECOR_MANHOLE]} 
                 />
             )}
         </group>

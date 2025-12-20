@@ -64,7 +64,7 @@ const IntersectionTrafficLights = memo(({ materials }: { materials: any }) => {
 
 const GameScene = () => {
     const { state, actions } = useGame();
-    const { grid, selectedTool } = state;
+    const { grid, stats, selectedTool } = state;
     const [hovered, setHovered] = useState<{x: number, y: number} | null>(null);
     const standardRoadMaterials = useRoadMaterials('standard');
 
@@ -123,8 +123,8 @@ const GameScene = () => {
                 }))}
             </group>
 
-            <TrafficSystem grid={grid} />
-            <PedestrianSystem grid={grid} />
+            <TrafficSystem grid={grid} stats={stats} />
+            <PedestrianSystem grid={grid} stats={stats} />
             <WildlifeSystem grid={grid} />
             <EnvironmentSystem />
 
