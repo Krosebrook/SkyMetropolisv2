@@ -3,179 +3,212 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { useMemo, useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { BuildingType } from '../../types';
 
-// --- Types ---
-interface MaterialProps extends THREE.MeshStandardMaterialParameters {
-    flatShading?: boolean;
-    opacity?: number;
-    transparent?: boolean;
-    roughness?: number;
-    metalness?: number;
-}
-
-interface CommonMeshProps {
-    position?: [number, number, number];
-    scale?: [number, number, number];
-    rotation?: [number, number, number];
-    castShadow?: boolean;
-    receiveShadow?: boolean;
-}
-
-interface BuildingProps {
-  type: BuildingType;
-  baseColor: string;
-  variant: number;
-  rotation: number;
-  opacity?: number;
-  transparent?: boolean;
-}
-
-// --- Geometries ---
 const GEO = {
   box: new THREE.BoxGeometry(1, 1, 1),
-  cylinder: new THREE.CylinderGeometry(1, 1, 1, 12),
-  cone: new THREE.ConeGeometry(1, 1, 4),
-  plane: new THREE.PlaneGeometry(1, 1, 24, 24),
+  cylinder: new THREE.CylinderGeometry(0.5, 0.5, 1, 16),
 };
 
-const SHARED_MATS = {
-    concrete: new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.8, metalness: 0.1 }),
-};
-
-const WindowBlock: React.FC<CommonMeshProps & { intensity?: number }> = ({ position, scale, intensity = 1.2 }) => (
-  <mesh geometry={GEO.box} position={position} scale={scale}>
-    <meshStandardMaterial 
-        color="#fff9db" 
-        emissive="#fde047" 
-        emissiveIntensity={intensity} 
-        roughness={0.0} 
-        metalness={1.0} 
-    />
-  </mesh>
-);
-
-const WaterAsset = ({ opacity = 0.95 }) => {
-    const meshRef = useRef<THREE.Mesh>(null);
-    const sparkleRef = useRef<THREE.Points>(null);
-    
-    const sparkleGeo = useMemo(() => {
-        const geo = new THREE.BufferGeometry();
-        const count = 30;
-        const positions = new Float32Array(count * 3);
-        for(let i=0; i<count; i++) {
-            positions[i*3] = (Math.random() - 0.5) * 0.95;
-            positions[i*3+1] = (Math.random() - 0.5) * 0.95;
-            positions[i*3+2] = 0.08;
-        }
-        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        return geo;
-    }, []);
-
-    useFrame(({ clock }) => {
-        const time = clock.getElapsedTime();
-        if (meshRef.current) {
-            const pos = meshRef.current.geometry.attributes.position;
-            const mat = meshRef.current.material as THREE.MeshStandardMaterial;
-            for (let i = 0; i < pos.count; i++) {
-                const x = pos.getX(i);
-                const y = pos.getY(i);
-                const z = Math.sin(x * 5 + time * 2) * 0.05 + Math.cos(y * 5 + time) * 0.05;
-                pos.setZ(i, z);
-            }
-            pos.needsUpdate = true;
-            mat.emissiveIntensity = 0.6 + Math.sin(time * 3) * 0.4; // Pulse effect
-        }
-        if (sparkleRef.current) {
-            sparkleRef.current.material.opacity = (Math.sin(time * 15) + 1) / 2;
-        }
-    });
-
+const WindowPanels = ({ scale, color }: { scale: [number, number, number], color: string }) => {
+    // Procedural window frame look using a single thin mesh or geometry
     return (
-        <group>
-            <mesh ref={meshRef} geometry={GEO.plane} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
-                <meshStandardMaterial 
-                    color="#0891b2" 
-                    metalness={1.0} 
-                    roughness={0.0} 
-                    emissive="#06b6d4" 
-                    emissiveIntensity={1.0} 
+        <group scale={scale}>
+            {/* Horizontal bands */}
+            <mesh position={[0, 0.1, 0]} scale={[1.02, 0.02, 1.02]}>
+                <boxGeometry />
+                <meshBasicMaterial color="#ffffff" transparent opacity={0.1} />
+            </mesh>
+            <mesh position={[0, -0.1, 0]} scale={[1.02, 0.02, 1.02]}>
+                <boxGeometry />
+                <meshBasicMaterial color="#ffffff" transparent opacity={0.1} />
+            </mesh>
+            {/* Vertical corners */}
+            <mesh position={[0, 0, 0]} scale={[0.9, 0.9, 0.9]}>
+                <boxGeometry />
+                <meshPhysicalMaterial 
+                    color={color} 
+                    metalness={1} 
+                    roughness={0} 
+                    transmission={0.8} 
+                    thickness={0.5} 
                     transparent 
-                    opacity={opacity} 
+                    opacity={0.3} 
                 />
             </mesh>
-            <points ref={sparkleRef} geometry={sparkleGeo} rotation={[-Math.PI/2, 0, 0]} position={[0, 0.1, 0]}>
-                <pointsMaterial color="white" size={0.08} transparent />
-            </points>
         </group>
     );
 };
 
-export const ProceduralBuilding = React.memo(({ type, baseColor, variant, rotation, opacity = 1, transparent = false }: BuildingProps) => {
-  const commonProps = { castShadow: true, receiveShadow: true };
-  const matProps: MaterialProps = { flatShading: false, opacity, transparent, roughness: 0.35, metalness: 0.2 };
-  
-  const color = useMemo(() => {
-    const c = new THREE.Color(baseColor);
-    if (!transparent) c.offsetHSL(0, 0, (variant % 10 - 5) / 100);
-    return c;
-  }, [baseColor, variant, transparent]);
+const CyberLight = ({ position, color, scale = [1, 1, 1], pulse = false }: any) => {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (pulse && ref.current) {
+      const s = 1 + Math.sin(clock.getElapsedTime() * 4) * 0.2;
+      ref.current.scale.set(scale[0] * s, scale[1] * s, scale[2] * s);
+    }
+  });
+  return (
+    <mesh ref={ref} position={position} scale={scale}>
+      <boxGeometry args={[0.05, 0.05, 0.05]} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={15} />
+    </mesh>
+  );
+};
 
-  const materials = useMemo(() => ({
-    main: new THREE.MeshStandardMaterial({ color: color, ...matProps }),
-    roof: new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.6), ...matProps, roughness: 0.8 }),
-  }), [color, matProps]);
-  
-  const yOffset = -0.3;
+const Antenna = ({ position, color }: any) => {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      const s = 1 + Math.sin(clock.getElapsedTime() * 10) * 0.1;
+      ref.current.children[1].scale.set(s, s, s);
+    }
+  });
+  return (
+    <group position={position} ref={ref}>
+      <mesh scale={[0.02, 0.4, 0.02]} position={[0, 0.2, 0]}>
+        <boxGeometry />
+        <meshStandardMaterial color="#334155" metalness={1} roughness={0.2} />
+      </mesh>
+      <mesh position={[0, 0.45, 0]}>
+        <sphereGeometry args={[0.02, 8, 8]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={20} />
+      </mesh>
+    </group>
+  );
+};
 
+export const ProceduralBuilding = React.memo(({ type, baseColor, rotation, opacity = 1, transparent = false }: any) => {
+  
   const renderResidential = () => (
     <group>
-        <mesh {...commonProps} material={variant < 50 ? materials.main : SHARED_MATS.concrete} geometry={GEO.box} position={[0, 0.45, 0]} scale={[0.85, 0.9, 0.85]} />
-        <mesh {...commonProps} material={materials.roof} geometry={GEO.cone} position={[0, 1.0, 0]} scale={[0.9, 0.5, 0.9]} rotation={[0, Math.PI/4, 0]} />
-        <WindowBlock position={[0, 0.5, 0.44]} scale={[0.6, 0.5, 0.02]} />
+        <mesh geometry={GEO.box} position={[0, 0.5, 0]} scale={[0.8, 1.0, 0.8]} castShadow>
+          <meshPhysicalMaterial 
+            color="#0f172a" 
+            roughness={0.05} 
+            metalness={0.95}
+            clearcoat={1.0}
+            transparent={transparent}
+            opacity={opacity}
+          />
+        </mesh>
+        <mesh geometry={GEO.box} position={[0, 0.5, 0]} scale={[0.82, 0.85, 0.82]}>
+          <meshPhysicalMaterial
+            color={baseColor}
+            roughness={0}
+            metalness={1}
+            transmission={0.9}
+            thickness={2}
+            transparent={transparent}
+            opacity={opacity * 0.9}
+          />
+        </mesh>
+        <WindowPanels scale={[0.83, 1.01, 0.83]} color={baseColor} />
+        <CyberLight position={[0.42, 0.8, 0.42]} color="#2dd4bf" />
+        <CyberLight position={[-0.42, 0.2, 0.42]} color="#2dd4bf" />
+        <Antenna position={[0.2, 1, 0.2]} color="#2dd4bf" />
     </group>
   );
 
   const renderCommercial = () => (
     <group>
-        <mesh {...commonProps} material={materials.main} geometry={GEO.box} position={[0, 0.55, 0]} scale={[0.95, 1.1, 0.95]} />
-        <WindowBlock position={[0, 0.7, 0.48]} scale={[0.8, 0.3, 0.02]} />
-        <WindowBlock position={[0, 0.3, 0.48]} scale={[0.8, 0.2, 0.02]} />
+        <mesh geometry={GEO.box} position={[0, 0.7, 0]} scale={[0.9, 1.4, 0.9]} castShadow>
+          <meshPhysicalMaterial 
+            color="#0f172a" 
+            roughness={0.05} 
+            metalness={0.95}
+            clearcoat={1.0}
+            transparent={transparent}
+            opacity={opacity}
+          />
+        </mesh>
+        <mesh geometry={GEO.box} position={[0, 0.7, 0]} scale={[0.95, 0.6, 0.95]}>
+          <meshPhysicalMaterial
+            color={baseColor}
+            roughness={0}
+            metalness={1}
+            transmission={0.9}
+            thickness={2}
+            transparent={transparent}
+            opacity={opacity * 0.9}
+          />
+        </mesh>
+        <WindowPanels scale={[0.96, 1.41, 0.96]} color={baseColor} />
+        <Antenna position={[0, 1.4, 0]} color="#a855f7" />
+        <CyberLight position={[0, 0.2, 0.46]} color="#a855f7" scale={[18, 0.2, 1]} />
     </group>
   );
 
   const renderIndustrial = () => (
     <group>
-        <mesh {...commonProps} material={materials.main} geometry={GEO.box} position={[0, 0.5, 0]} scale={[1.1, 1, 1.1]} />
-        <mesh geometry={GEO.cylinder} position={[-0.4, 1.0, -0.4]} scale={[0.2, 0.8, 0.2]} {...commonProps}>
-            <meshStandardMaterial color="#475569" />
+        <mesh geometry={GEO.box} position={[0, 0.4, 0]} scale={[1, 0.8, 1]} castShadow>
+          <meshPhysicalMaterial 
+            color="#1e293b" 
+            roughness={0.4} 
+            metalness={0.9}
+            transparent={transparent}
+            opacity={opacity}
+          />
         </mesh>
-        <mesh geometry={GEO.cylinder} position={[0.4, 1.0, 0.4]} scale={[0.2, 0.8, 0.2]} {...commonProps}>
-            <meshStandardMaterial color="#475569" />
+        <mesh position={[0.2, 0.9, 0.2]} scale={[0.3, 0.6, 0.3]}>
+          <meshPhysicalMaterial color="#334155" roughness={0.1} metalness={1} clearcoat={1} />
         </mesh>
+        <mesh position={[-0.2, 0.9, -0.2]} scale={[0.3, 0.6, 0.3]}>
+          <meshPhysicalMaterial color="#334155" roughness={0.1} metalness={1} clearcoat={1} />
+        </mesh>
+        <CyberLight position={[0, 0.4, 0.51]} color="#f59e0b" scale={[15, 0.5, 1]} pulse />
     </group>
   );
 
   const renderPark = () => (
-    <group position={[0, -0.25, 0]}>
-        <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-            <planeGeometry args={[0.98, 0.98]} />
-            <meshStandardMaterial color="#065f46" roughness={1.0} />
+    <group>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+            <planeGeometry args={[0.95, 0.95]} />
+            <meshStandardMaterial color="#064e3b" roughness={1} />
         </mesh>
-        <mesh {...commonProps} material={new THREE.MeshStandardMaterial({color:'#064e3b'})} geometry={GEO.cone} position={[0, 0.6, 0]} scale={[0.6, 1.2, 0.6]} />
+        <group position={[0, 0.3, 0]}>
+            <mesh scale={[0.4, 0.8, 0.4]}>
+                <cylinderGeometry args={[0.5, 0.5, 1, 6]} />
+                <meshPhysicalMaterial 
+                    color="#bef264" 
+                    transparent 
+                    opacity={0.5} 
+                    emissive="#bef264" 
+                    emissiveIntensity={2} 
+                    metalness={0.5} 
+                    roughness={0} 
+                />
+            </mesh>
+            <CyberLight position={[0, 0.5, 0]} color="#bef264" pulse />
+        </group>
     </group>
   );
 
+  const renderWater = () => (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+        <planeGeometry args={[0.98, 0.98]} />
+        <meshPhysicalMaterial 
+            color="#1d4ed8" 
+            transmission={0.9} 
+            thickness={3} 
+            roughness={0.05} 
+            metalness={0.6}
+            transparent={transparent} 
+            opacity={opacity * 0.8} 
+        />
+    </mesh>
+  );
+
   return (
-    <group rotation={[0, rotation * (Math.PI/2), 0]} position={[0, yOffset, 0]}>
+    <group rotation={[0, rotation * (Math.PI/2), 0]}>
       {type === BuildingType.Residential && renderResidential()}
       {type === BuildingType.Commercial && renderCommercial()}
       {type === BuildingType.Industrial && renderIndustrial()}
       {type === BuildingType.Park && renderPark()}
-      {type === BuildingType.Water && <WaterAsset opacity={opacity} />}
+      {type === BuildingType.Water && renderWater()}
     </group>
   );
 });

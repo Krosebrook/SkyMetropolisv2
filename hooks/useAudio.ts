@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -7,27 +8,25 @@ import { useCallback } from 'react';
 import { Howl, Howler } from 'howler';
 
 const SOUNDS = {
-  place: 'https://assets.mixkit.co/active_storage/sfx/2578/2578-preview.mp3',
-  bulldoze: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3',
-  reward: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3',
-  error: 'https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3',
-  uiClick: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',
-  bgm: 'https://assets.mixkit.co/active_storage/sfx/1202/1202-preview.mp3'
+  // Cinematic Tech Sound Set
+  place: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3', // Holographic snap
+  bulldoze: 'https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3', // Data de-rez
+  reward: 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3', // Shimmering unlock
+  error: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3', // Low-freq warning
+  uiClick: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3', // Tactile click
+  bgm: 'https://assets.mixkit.co/active_storage/sfx/1202/1202-preview.mp3' // Ambient Data Hum / Low Synth Pad
 };
 
 export type SoundKey = keyof typeof SOUNDS;
 
-// Global singleton cache for Howl instances to prevent leaks
 const sfxCache: Partial<Record<SoundKey, Howl>> = {};
 
 const getSound = (key: SoundKey): Howl => {
   if (!sfxCache[key]) {
     sfxCache[key] = new Howl({
       src: [SOUNDS[key]],
-      volume: key === 'bgm' ? 0.0 : 0.4,
+      volume: key === 'bgm' ? 0.0 : 0.25,
       loop: key === 'bgm',
-      // Edge Case: Pool exhaustion. Switching html5 to false for small assets
-      // to rely on Web Audio API which handles concurrent voices more robustly.
       html5: false, 
       preload: true,
     });
@@ -40,7 +39,6 @@ export const useAudio = () => {
     try {
       const s = getSound(sound);
       
-      // Safety check for state
       if (Howler.ctx && Howler.ctx.state === 'suspended') {
         Howler.ctx.resume();
       }
@@ -50,13 +48,13 @@ export const useAudio = () => {
       if (sound === 'bgm') {
         if (!s.playing()) {
           s.play();
-          const targetVol = options?.volume ?? 0.15;
+          const targetVol = options?.volume ?? 0.08; // Very subtle background hum
           if (options?.fade) s.fade(0, targetVol, options.fade);
           else s.volume(targetVol);
         }
       } else {
-        // Overlay standard SFX
-        if (options?.volume !== undefined) s.volume(options.volume);
+        const finalVol = options?.volume ?? 0.2;
+        s.volume(finalVol);
         s.play();
       }
     } catch (e) {

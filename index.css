@@ -1,0 +1,58 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap');
+
+:root {
+  --cyber-bg: #0f172a;
+  --cyber-teal: #2dd4bf;
+  --cyber-purple: #a855f7;
+  --cyber-lime: #bef264;
+  --glass-bg: rgba(15, 23, 42, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+body {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--cyber-bg);
+  color: white;
+  overflow: hidden;
+  user-select: none;
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.neon-btn {
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid var(--glass-border);
+  overflow: hidden;
+}
+
+.neon-btn:hover {
+  border-color: var(--cyber-teal);
+  box-shadow: 0 0 15px rgba(45, 212, 191, 0.3);
+  transform: translateY(-2px);
+}
+
+.neon-btn:active {
+  transform: translateY(1px);
+}
+
+.stat-glow {
+  text-shadow: 0 0 10px currentColor;
+}
+
+@keyframes grid-pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.animate-grid-pulse {
+  animation: grid-pulse 2s infinite ease-in-out;
+}

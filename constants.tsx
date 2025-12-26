@@ -5,88 +5,84 @@
 */
 import { BuildingConfig, BuildingType } from './types';
 
-// World Configuration - Area increased to 48x48
 export const GRID_SIZE = 48;
 export const WORLD_OFFSET = GRID_SIZE / 2 - 0.5;
 
-// Simulation Configuration
-export const TICK_RATE_MS = 2000; 
-export const INITIAL_MONEY = 5000; // Increased starting money for huge map
-export const DEMOLISH_COST = 5;
+export const TICK_RATE_MS = 2500; 
+export const INITIAL_MONEY = 5000; 
+export const DEMOLISH_COST = 50; 
 
-// Balance Constants
 export const GAME_BALANCE = {
-  POPULATION_PER_RESIDENTIAL: 60, 
-  POPULATION_DECAY: 15,           
-  TRAFFIC_PENALTY_THRESHOLD: 25,  
-  HAPPINESS_BASE: 60,
-  HAPPINESS_PER_PARK: 6,          
+  POPULATION_PER_RESIDENTIAL: 50, 
+  POPULATION_DECAY: 5,           
+  TRAFFIC_PENALTY_THRESHOLD: 150,
+  HAPPINESS_BASE: 70,
+  HAPPINESS_PER_PARK: 8,          
   HAPPINESS_PER_WATER: 4,         
-  HAPPINESS_TRAFFIC_PENALTY: 10,  
+  HAPPINESS_TRAFFIC_PENALTY: 5,  
 };
 
-// Building Registry
 export const BUILDINGS: Record<BuildingType, BuildingConfig> = {
   [BuildingType.None]: {
     type: BuildingType.None,
     cost: DEMOLISH_COST,
-    name: 'Bulldoze',
-    description: 'Clear land ($5)',
+    name: 'Deconstruct',
+    description: 'Remove structure and recycle materials.',
     color: '#ef4444',
     popGen: 0,
     incomeGen: 0,
   },
   [BuildingType.Road]: {
     type: BuildingType.Road,
-    cost: 10,
-    name: 'Road',
-    description: 'Infrastructure',
-    color: '#374151',
+    cost: 20,
+    name: 'Smart Grid',
+    description: 'Transit and data connectivity backbone.',
+    color: '#334155',
     popGen: 0,
-    incomeGen: -1,
+    incomeGen: 0,
   },
   [BuildingType.Residential]: {
     type: BuildingType.Residential,
-    cost: 100,
-    name: 'House',
-    description: '+5 Pop/day',
-    color: '#f87171',
-    popGen: 5,
-    incomeGen: 2,
+    cost: 200,
+    name: 'Eco-Housing',
+    description: 'Sustainable high-density living units.',
+    color: '#2dd4bf',
+    popGen: 10,
+    incomeGen: 15,
   },
   [BuildingType.Commercial]: {
     type: BuildingType.Commercial,
-    cost: 200,
-    name: 'Shop',
-    description: '+$15/day',
-    color: '#60a5fa',
+    cost: 450,
+    name: 'Tech District',
+    description: 'Innovation hubs and commercial centers.',
+    color: '#a855f7',
     popGen: 0,
-    incomeGen: 15,
+    incomeGen: 60,
   },
   [BuildingType.Industrial]: {
     type: BuildingType.Industrial,
-    cost: 400,
-    name: 'Factory',
-    description: '+$40/day',
-    color: '#facc15',
+    cost: 800,
+    name: 'Bio-Factory',
+    description: 'Automated sustainable manufacturing.',
+    color: '#f59e0b',
     popGen: 0,
-    incomeGen: 40,
+    incomeGen: 150,
   },
   [BuildingType.Park]: {
     type: BuildingType.Park,
-    cost: 75,
-    name: 'Park',
-    description: '+Happiness & Wildlife',
-    color: '#4ade80',
-    popGen: 1,
-    incomeGen: -2,
+    cost: 150,
+    name: 'Carbon Sink',
+    description: 'Public green space and air filtration.',
+    color: '#bef264',
+    popGen: 2,
+    incomeGen: -5,
   },
   [BuildingType.Water]: {
     type: BuildingType.Water,
-    cost: 30,
-    name: 'Water',
-    description: 'Deep Blue Glow',
-    color: '#06b6d4',
+    cost: 100,
+    name: 'Hydro-Reservoir',
+    description: 'Water management and cooling systems.',
+    color: '#3b82f6',
     popGen: 0,
     incomeGen: 0,
   },

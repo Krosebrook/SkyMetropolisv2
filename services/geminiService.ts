@@ -3,117 +3,180 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { AIGoal, BuildingType, CityStats, Grid, NewsItem } from "../types";
-import { BUILDINGS } from "../constants";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-const MODEL_ID = 'gemini-3-flash-preview';
+const DEFAULT_MODEL = 'gemini-3-flash-preview';
 
-const GOAL_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    description: { type: Type.STRING, description: "A catchy mission description" },
-    targetType: { type: Type.STRING, enum: ['population', 'money', 'building_count'] },
-    targetValue: { type: Type.INTEGER },
-    buildingType: { 
-      type: Type.STRING, 
-      enum: [BuildingType.Residential, BuildingType.Commercial, BuildingType.Industrial, BuildingType.Park, BuildingType.Road] 
+const STRATEGIC_AI_INSTRUCTION = "You are the 'Nexus City Architect' AI. Your tone is professional, futuristic, and highly strategic. Use technical urban planning terms like 'sustainability index', 'grid efficiency', and 'zoning optimization'. Be helpful but treat the user as a capable lead engineer.";
+
+export const createLiveSession = (callbacks: any) => {
+  return ai.live.connect({
+    model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+    callbacks,
+    config: {
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } },
+      },
+      systemInstruction: `${STRATEGIC_AI_INSTRUCTION} Analyze the city and provide data-driven suggestions for growth.`,
     },
-    reward: { type: Type.INTEGER },
-  },
-  required: ['description', 'targetType', 'targetValue', 'reward'],
+  });
 };
 
-const NEWS_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    text: { type: Type.STRING },
-    type: { type: Type.STRING, enum: ['positive', 'negative', 'neutral'] },
-  },
-  required: ['text', 'type'],
+export const getThinkingAdvisorResponse = async (query: string, stats: CityStats): Promise<string> => {
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
+    contents: `Urban Planning Query: ${query}`,
+    config: {
+      thinkingConfig: { thinkingBudget: 2000 },
+      systemInstruction: `${STRATEGIC_AI_INSTRUCTION} Provide a multi-step strategic plan for the requested city expansion.`
+    }
+  });
+  return response.text || "Strategic data unavailable.";
 };
 
-const getBuildingCounts = (grid: Grid) => {
-  const counts: Record<string, number> = {};
-  grid.flat().forEach(t => counts[t.buildingType] = (counts[t.buildingType] || 0) + 1);
-  return counts;
-};
+export const searchLocalPlaces = async (query: string, lat: number, lng: number): Promise<{text: string, sources: any[]}> => {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: query,
+    config: {
+      tools: [{ googleMaps: {} }],
+      toolConfig: {
+        retrievalConfig: {
+          latLng: {
+            latitude: lat,
+            longitude: lng
+          }
+        }
+      },
+      systemInstruction: `${STRATEGIC_AI_INSTRUCTION} Analyze the real-world surroundings and provide architectural or urban planning insights based on the user's current location.`
+    },
+  });
 
-// Edge Case: AI output sanitization
-const isValidBuildingType = (val: string): val is BuildingType => {
-    return Object.values(BuildingType).includes(val as BuildingType) && val !== BuildingType.None;
+  const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  return {
+    text: response.text || "No spatial data retrieved.",
+    sources
+  };
 };
 
 export const generateCityGoal = async (stats: CityStats, grid: Grid): Promise<AIGoal | null> => {
-  const counts = getBuildingCounts(grid);
-  const context = `
-    CITY STATE: Day ${stats.day}, $${stats.money}, Pop ${stats.population}, Happy ${stats.happiness}%.
-    INVENTORY: ${JSON.stringify(counts)}.
-    AVAILABLE BUILDINGS: ${JSON.stringify(Object.values(BUILDINGS).filter(b => b.type !== BuildingType.None).map(b => ({type: b.type, cost: b.cost})))}
-  `;
+    try {
+      const response = await ai.models.generateContent({
+        model: DEFAULT_MODEL,
+        contents: `Generate a high-level infrastructure challenge for a smart city architect.`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              description: { type: Type.STRING, description: "Professional goal like 'Optimize grid stability by expanding the Bio-Factory district.'" },
+              targetType: { type: Type.STRING, enum: ['population', 'money', 'building_count'] },
+              targetValue: { type: Type.INTEGER },
+              buildingType: { type: Type.STRING },
+              reward: { type: Type.INTEGER },
+            },
+            required: ['description', 'targetType', 'targetValue', 'reward'],
+          },
+          systemInstruction: STRATEGIC_AI_INSTRUCTION
+        },
+      });
+      const data = JSON.parse(response.text?.trim() || "{}");
+      return { id: crypto.randomUUID(), ...data, completed: false };
+    } catch (error) { return null; }
+};
 
+export const generateNewsEvent = async (stats: CityStats): Promise<NewsItem | null> => {
+    try {
+      const response = await ai.models.generateContent({
+        model: DEFAULT_MODEL,
+        contents: `Generate a smart city news alert about technology, economy, or environment.`,
+        config: { 
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  text: { type: Type.STRING, description: "e.g., 'Quantum computing breakthrough boosts Tech District efficiency.'" },
+                  type: { type: Type.STRING, enum: ['positive', 'negative', 'neutral'] },
+                },
+                required: ['text', 'type'],
+              },
+            systemInstruction: STRATEGIC_AI_INSTRUCTION
+        },
+      });
+      const data = JSON.parse(response.text?.trim() || "{}");
+      return { id: crypto.randomUUID(), text: data.text, type: data.type, timestamp: Date.now() };
+    } catch (error) { return null; }
+};
+
+export const generateProImage = async (prompt: string, size: "1K" | "2K" | "4K"): Promise<string | null> => {
+  const aiPro = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
-    const response = await ai.models.generateContent({
-      model: MODEL_ID,
-      contents: `${context}\nAct as a strategic advisor. Suggest a specific milestone goal. Output JSON.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: GOAL_SCHEMA,
-        temperature: 0.7, // Add slight variance for better replayability
-      },
+    const response = await aiPro.models.generateContent({
+      model: 'gemini-3-pro-image-preview',
+      contents: { parts: [{ text: `A photorealistic futuristic smart city design showing: ${prompt}. Cinematic lighting, 8k, architectural visualization.` }] },
+      config: { imageConfig: { aspectRatio: "16:9", imageSize: size } },
     });
+    const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+    return part?.inlineData ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : null;
+  } catch (e) { return null; }
+};
 
-    const text = response.text?.trim();
-    if (!text) return null;
+export const generateCouncilMeeting = async (prompt: string): Promise<string | null> => {
+  try {
+    const meetingPrompt = `Conduct a short 2-person council meeting about the following city topic: ${prompt}.
+      Speakers: Architect (Technical, strategic) and Resident (Enthusiastic, community-focused).
+      Architect: ...
+      Resident: ...`;
 
-    const data = JSON.parse(text);
-    
-    // Strict Validation
-    if (!data.description || !data.targetValue || data.targetValue <= 0) return null;
-    
-    // Ensure buildingType exists if target is building_count
-    if (data.targetType === 'building_count') {
-        if (!data.buildingType || !isValidBuildingType(data.buildingType)) {
-            data.buildingType = BuildingType.Residential; // Default fallback
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: meetingPrompt }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          multiSpeakerVoiceConfig: {
+            speakerVoiceConfigs: [
+              {
+                speaker: 'Architect',
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
+              },
+              {
+                speaker: 'Resident',
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } }
+              }
+            ]
+          }
         }
-    }
-
-    return { 
-      id: crypto.randomUUID(), 
-      ...data,
-      reward: Math.max(50, Math.min(2000, data.reward || 100)), // Clamp rewards
-      completed: false 
-    };
-  } catch (error) {
-    console.warn("Gemini Service: Goal Generation failed.", error);
+      }
+    });
+    return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
+  } catch (e) {
+    console.error("Council meeting generation failed:", e);
     return null;
   }
 };
 
-export const generateNewsEvent = async (stats: CityStats): Promise<NewsItem | null> => {
+export const generateVeoVideo = async (prompt: string, imageBase64?: string): Promise<string | null> => {
+  const aiVeo = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
-    const response = await ai.models.generateContent({
-      model: MODEL_ID,
-      contents: `City Pop: ${stats.population}, Money: ${stats.money}. Generate a short, witty news headline. Output JSON.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: NEWS_SCHEMA,
-      },
-    });
-
-    const text = response.text?.trim();
-    if (!text) return null;
-
-    const data = JSON.parse(text);
-    return {
-      id: crypto.randomUUID(),
-      text: data.text || "Everything is quiet in the city today.",
-      type: data.type || 'neutral',
-      timestamp: Date.now(),
+    const payload: any = {
+      model: 'veo-3.1-fast-generate-preview',
+      prompt: `Breathtaking cinematic drone sweep of a futuristic city: ${prompt}`,
+      config: { numberOfVideos: 1, resolution: '1080p', aspectRatio: '16:9' }
     };
-  } catch (error) {
-    console.warn("Gemini Service: News Generation failed.");
-    return null;
-  }
+    if (imageBase64) {
+      const base64Data = imageBase64.split(',')[1] || imageBase64;
+      payload.image = { imageBytes: base64Data, mimeType: 'image/png' };
+    }
+    let operation = await aiVeo.models.generateVideos(payload);
+    while (!operation.done) {
+      await new Promise(r => setTimeout(r, 10000));
+      operation = await aiVeo.operations.getVideosOperation({ operation });
+    }
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    return downloadLink ? `${downloadLink}&key=${process.env.API_KEY}` : null;
+  } catch (e) { return null; }
 };
