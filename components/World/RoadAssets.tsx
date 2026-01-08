@@ -20,18 +20,18 @@ const ROAD_THEME = {
     crosswalk: '#a855f7', 
     joint: '#1e293b',
     manhole: '#0f172a',
-    patch: '#0a0f1e'
+    patch: '#050a14'
 };
 
 const GEO = {
     tile: new THREE.BoxGeometry(1, 0.1, 1),
-    curb: new THREE.BoxGeometry(1.01, 0.14, 0.03),
-    dash: new THREE.PlaneGeometry(0.02, 0.45),
-    crosswalkBar: new THREE.PlaneGeometry(0.04, 0.4),
-    cornerMark: new THREE.TorusGeometry(0.49, 0.01, 8, 32, Math.PI / 2),
-    joint: new THREE.PlaneGeometry(1, 0.01),
-    manhole: new THREE.CircleGeometry(0.12, 16),
-    patch: new THREE.PlaneGeometry(0.35, 0.25),
+    curb: new THREE.BoxGeometry(1.01, 0.15, 0.035),
+    dash: new THREE.PlaneGeometry(0.025, 0.48),
+    crosswalkBar: new THREE.PlaneGeometry(0.045, 0.42),
+    cornerMark: new THREE.TorusGeometry(0.485, 0.012, 8, 48, Math.PI / 2),
+    joint: new THREE.PlaneGeometry(1, 0.015),
+    manhole: new THREE.CircleGeometry(0.125, 32),
+    patch: new THREE.PlaneGeometry(0.38, 0.28),
 };
 
 interface TopologyInfo {
@@ -42,17 +42,17 @@ interface TopologyInfo {
 
 // --- Sub-Components ---
 
-const NeonMaterial = ({ color, intensity = 12 }: { color: string, intensity?: number }) => {
+const NeonMaterial = ({ color, intensity = 15 }: { color: string, intensity?: number }) => {
   const ref = useRef<THREE.MeshStandardMaterial>(null);
   useFrame(({ clock }) => {
     if (ref.current) {
-      ref.current.emissiveIntensity = intensity + Math.sin(clock.getElapsedTime() * 8) * (intensity * 0.5);
+      ref.current.emissiveIntensity = intensity + Math.sin(clock.getElapsedTime() * 10) * (intensity * 0.4);
     }
   });
-  return <meshStandardMaterial ref={ref} color={color} emissive={color} emissiveIntensity={intensity} transparent opacity={0.95} />;
+  return <meshStandardMaterial ref={ref} color={color} emissive={color} emissiveIntensity={intensity} transparent opacity={0.98} />;
 };
 
-const MarkingBase = ({ children, rotation = 0, position = [0, 0.055, 0] }: any) => (
+const MarkingBase = ({ children, rotation = 0, position = [0, 0.056, 0] }: any) => (
     <group rotation={[-Math.PI / 2, 0, rotation]} position={position as any}>
         {children}
     </group>
@@ -70,20 +70,19 @@ const StraightMarkings = () => (
 );
 
 const CornerMarkings = () => (
-    <group position={[0, 0.055, 0]}>
-        <mesh geometry={GEO.cornerMark} rotation={[Math.PI / 2, 0, 0]} position={[-0.49, 0, -0.49]}>
+    <group position={[0, 0.056, 0]}>
+        <mesh geometry={GEO.cornerMark} rotation={[Math.PI / 2, 0, 0]} position={[-0.485, 0, -0.485]}>
             <NeonMaterial color={ROAD_THEME.marking} />
         </mesh>
     </group>
 );
 
-// Fix: Added key to props type definition to resolve TypeScript error in list rendering on line 194
-const Crosswalk = ({ rotation, centered = false }: { rotation: number, centered?: boolean, key?: React.Key }) => (
+const Crosswalk = ({ rotation, centered = false, key }: { rotation: number, centered?: boolean, key?: React.Key }) => (
     <MarkingBase rotation={rotation}>
-        <group position={[0, centered ? 0 : 0.42, 0]}>
+        <group position={[0, centered ? 0 : 0.43, 0]}>
             {[-0.35, -0.15, 0.15, 0.35].map((x, i) => (
                 <mesh key={i} geometry={GEO.crosswalkBar} position={[x, 0, 0]}>
-                    <NeonMaterial color={ROAD_THEME.crosswalk} intensity={6} />
+                    <NeonMaterial color={ROAD_THEME.crosswalk} intensity={8} />
                 </mesh>
             ))}
         </group>
@@ -91,38 +90,44 @@ const Crosswalk = ({ rotation, centered = false }: { rotation: number, centered?
 );
 
 const SidewalkCurb = ({ rotation }: { rotation: number }) => (
-    <group rotation={[0, rotation, 0]} position={[0, -0.04, 0]}>
-        <mesh geometry={GEO.curb} position={[0, 0.06, 0.485]}>
-            <meshPhysicalMaterial color={ROAD_THEME.sidewalk} roughness={0.05} metalness={0.9} clearcoat={1.0} />
+    <group rotation={[0, rotation, 0]} position={[0, -0.045, 0]}>
+        <mesh geometry={GEO.curb} position={[0, 0.065, 0.482]}>
+            <meshPhysicalMaterial 
+                color={ROAD_THEME.sidewalk} 
+                roughness={0.1} 
+                metalness={0.95} 
+                clearcoat={1.0} 
+                clearcoatRoughness={0.05}
+            />
         </mesh>
     </group>
 );
 
 const RoadJoint = ({ rotation }: { rotation: number }) => (
-    <mesh geometry={GEO.joint} rotation={[-Math.PI / 2, 0, rotation]} position={[0, 0.051, 0]}>
-        <meshBasicMaterial color={ROAD_THEME.joint} transparent opacity={0.3} />
+    <mesh geometry={GEO.joint} rotation={[-Math.PI / 2, 0, rotation]} position={[0, 0.052, 0]}>
+        <meshBasicMaterial color={ROAD_THEME.joint} transparent opacity={0.4} />
     </mesh>
 );
 
 const Manhole = () => (
-    <mesh geometry={GEO.manhole} rotation={[-Math.PI / 2, 0, 0]} position={[0.2, 0.052, 0.2]}>
+    <mesh geometry={GEO.manhole} rotation={[-Math.PI / 2, 0, 0]} position={[0.22, 0.053, 0.22]}>
         <meshPhysicalMaterial 
             color={ROAD_THEME.manhole} 
             metalness={1} 
-            roughness={0.4} 
-            clearcoat={0.2}
+            roughness={0.3} 
+            clearcoat={0.3}
         />
     </mesh>
 );
 
 const AsphaltPatch = ({ x, y }: { x: number, y: number }) => {
-    const px = ((x * 17) % 10) / 20 - 0.25;
-    const pz = ((y * 23) % 10) / 20 - 0.25;
+    const px = ((x * 19) % 10) / 20 - 0.25;
+    const pz = ((y * 29) % 10) / 20 - 0.25;
     const rot = (x * y) % Math.PI;
 
     return (
-        <mesh geometry={GEO.patch} rotation={[-Math.PI / 2, 0, rot]} position={[px, 0.0515, pz]}>
-            <meshBasicMaterial color={ROAD_THEME.patch} transparent opacity={0.6} />
+        <mesh geometry={GEO.patch} rotation={[-Math.PI / 2, 0, rot]} position={[px, 0.052, pz]}>
+            <meshBasicMaterial color={ROAD_THEME.patch} transparent opacity={0.8} />
         </mesh>
     );
 };
@@ -160,7 +165,13 @@ const RoadSurface = memo(({ x, y }: { x: number, y: number }) => {
     return (
         <group>
             <mesh geometry={GEO.tile} receiveShadow>
-                <meshPhysicalMaterial color={ROAD_THEME.asphalt} roughness={0.65} metalness={0.5} clearcoat={1.0} />
+                <meshPhysicalMaterial 
+                    color={ROAD_THEME.asphalt} 
+                    roughness={0.75} 
+                    metalness={0.6} 
+                    clearcoat={0.2}
+                    clearcoatRoughness={0.1}
+                />
             </mesh>
             <RoadJoint rotation={0} />
             <RoadJoint rotation={Math.PI / 2} />

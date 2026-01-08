@@ -19,13 +19,12 @@ const gridToWorld = (x: number, y: number): [number, number, number] => [x - WOR
 const GroundTile = memo(({ x, y, type, onClick, onHover }: any) => {
     const [wx, _, wz] = gridToWorld(x, y);
     
-    // Professional High-Contrast Palette
     const getColors = () => {
         switch(type) {
-            case BuildingType.None: return { color: '#0f172a', emissive: '#1e293b' };
-            case BuildingType.Road: return { color: '#020617', emissive: '#0f172a' };
-            case BuildingType.Water: return { color: '#1e3a8a', emissive: '#1e40af' };
-            default: return { color: '#1e293b', emissive: '#334155' };
+            case BuildingType.None: return { color: '#0f172a', emissive: '#020617' };
+            case BuildingType.Road: return { color: '#020617', emissive: '#000000' };
+            case BuildingType.Water: return { color: '#1e3a8a', emissive: '#1e3a8a' };
+            default: return { color: '#0f172a', emissive: '#0f172a' };
         }
     };
 
@@ -41,23 +40,31 @@ const GroundTile = memo(({ x, y, type, onClick, onHover }: any) => {
                 <boxGeometry args={[0.995, 0.3, 0.995]} />
                 <meshPhysicalMaterial 
                     color={color} 
-                    roughness={0.12} 
+                    roughness={0.2} 
                     metalness={0.9} 
-                    clearcoat={1.0}
-                    clearcoatRoughness={0.05}
+                    clearcoat={0.3}
+                    clearcoatRoughness={0.1}
                     emissive={type === BuildingType.None ? '#2dd4bf' : emissive} 
-                    emissiveIntensity={type === BuildingType.None ? 0.04 : 0.01} 
+                    emissiveIntensity={type === BuildingType.None ? 0.05 : 0.01} 
                 />
             </mesh>
-            {/* High-frequency detail grid overlay for sharpness */}
-            <mesh position={[0, 0.151, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                <planeGeometry args={[0.94, 0.94]} />
-                <meshBasicMaterial color="#ffffff" transparent opacity={0.02} side={THREE.DoubleSide} />
-            </mesh>
-            <mesh position={[0, 0.151, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                <planeGeometry args={[0.9, 0.9]} />
-                <meshBasicMaterial color="#ffffff" transparent opacity={0.01} side={THREE.DoubleSide} wireframe />
-            </mesh>
+            
+            {/* Precision Grid: Vertex Crosses */}
+            <group position={[0, 0.151, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <mesh>
+                    <planeGeometry args={[0.98, 0.98]} />
+                    <meshBasicMaterial color="#ffffff" transparent opacity={0.015} side={THREE.DoubleSide} wireframe />
+                </mesh>
+                {/* Center Cross Marker */}
+                <mesh scale={[0.08, 0.01, 1]}>
+                    <planeGeometry />
+                    <meshBasicMaterial color="#2dd4bf" transparent opacity={0.1} />
+                </mesh>
+                <mesh scale={[0.01, 0.08, 1]}>
+                    <planeGeometry />
+                    <meshBasicMaterial color="#2dd4bf" transparent opacity={0.1} />
+                </mesh>
+            </group>
         </group>
     );
 });
@@ -130,10 +137,10 @@ const GameScene = () => {
 
             <ContactShadows 
                 position={[0, -0.3, 0]} 
-                opacity={0.85} 
+                opacity={0.7} 
                 scale={150} 
-                blur={2.2} 
-                far={20} 
+                blur={2.5} 
+                far={30} 
                 color="#000000" 
             />
         </>
@@ -150,31 +157,44 @@ const IsoMap = () => {
             antialias: true, 
             toneMapping: THREE.ACESFilmicToneMapping,
             powerPreference: 'high-performance',
-            stencil: false
+            stencil: false,
+            alpha: false
         }}
       >
         <OrthographicCamera makeDefault zoom={40} position={[100, 100, 100]} near={-1000} far={5000} />
-        <MapControls enableRotate={false} minZoom={20} maxZoom={100} dampingFactor={0.1} />
+        <MapControls 
+            enableRotate={false} 
+            minZoom={20} 
+            maxZoom={120} 
+            dampingFactor={0.15} 
+            screenSpacePanning={true}
+        />
         
-        {/* Balanced High-End Lighting */}
-        <ambientLight intensity={0.4} color="#1e293b" />
+        {/* Cinematic High-Contrast Lighting */}
+        <ambientLight intensity={0.2} color="#1e293b" />
         <directionalLight 
-            position={[100, 150, 100]} 
-            intensity={3.5} 
+            position={[100, 150, 50]} 
+            intensity={4} 
             castShadow 
-            shadow-mapSize={[2048, 2048]}
-            shadow-bias={-0.0001}
+            shadow-mapSize={[4096, 4096]}
+            shadow-bias={-0.00005}
             shadow-camera-left={-100}
             shadow-camera-right={100}
             shadow-camera-top={100}
             shadow-camera-bottom={-100}
-        />
-        <pointLight position={[-50, 80, -50]} intensity={3.0} color="#a855f7" />
-        <pointLight position={[70, 40, 0]} intensity={2.5} color="#2dd4bf" />
-        <pointLight position={[0, 50, 70]} intensity={2.0} color="#3b82f6" />
+        >
+            <orthographicCamera attach="shadow-camera" args={[-100, 100, 100, -100]} />
+        </directionalLight>
+        
+        <pointLight position={[-80, 120, -80]} intensity={5.0} color="#a855f7" distance={300} decay={1.5} />
+        <pointLight position={[80, 60, 20]} intensity={4.5} color="#2dd4bf" distance={300} decay={1.5} />
+        <pointLight position={[20, 80, 80]} intensity={3.5} color="#3b82f6" distance={300} decay={1.5} />
+        
+        {/* Subtle Rim Light for Depth */}
+        <spotLight position={[-100, 50, -100]} intensity={2.5} color="#ffffff" angle={0.3} penumbra={1} />
         
         <Suspense fallback={null}>
-            <Environment preset="night" intensity={0.25} />
+            <Environment preset="night" intensity={0.1} />
             <GameScene />
         </Suspense>
       </Canvas>
