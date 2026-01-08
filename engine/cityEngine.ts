@@ -140,20 +140,23 @@ export const cityEngine = {
 
     const mid = Math.floor(GRID_SIZE / 2);
     
-    // Create central main roads - SCALED DOWN from +/- 10 to +/- 5
+    // Create central main roads
     for (let i = mid - 5; i <= mid + 5; i++) {
         grid[mid][i] = { ...grid[mid][i], buildingType: BuildingType.Road };
         grid[i][mid] = { ...grid[i][mid], buildingType: BuildingType.Road };
     }
     
-    // Create a Central Lake - SCALED DOWN from 5x5 to 3x3
+    // Target a specific segment for the pedestrian crossing
+    grid[mid][mid - 1] = { ...grid[mid][mid - 1], customId: 'road-segment-a', buildingType: BuildingType.Road };
+
+    // Create a Central Lake
     for (let y = mid - 3; y <= mid - 1; y++) {
         for (let x = mid + 1; x <= mid + 3; x++) {
             grid[y][x] = { ...grid[y][x], buildingType: BuildingType.Water };
         }
     }
 
-    // Create a Forest - SCALED DOWN from 5x5 to 3x3
+    // Create a Forest
     for (let y = mid + 1; y <= mid + 3; y++) {
         for (let x = mid - 3; x <= mid - 1; x++) {
             grid[y][x] = { ...grid[y][x], buildingType: BuildingType.Park };
